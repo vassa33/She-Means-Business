@@ -1,6 +1,6 @@
 {
   "name": "she-means-business",
-  "main": "src/App.tsx",
+  "main": "src/App.js",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
