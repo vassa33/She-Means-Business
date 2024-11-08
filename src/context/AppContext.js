@@ -1,22 +1,33 @@
 // context/AppContext.js
 import React, { createContext, useState, useContext } from 'react';
-import { useNavigation } from '@react-navigation/native';
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
     const [profileData, setProfileData] = useState({
-        name: 'Vee Kimani',
-        business: 'EK Crafts',
-        phone: '+254 712 345 678',
+        name: 'Lady Pam ✨',
+        business: 'Vee Studios',
+        phone: '+254 794 552 223',
         profilePic: null,
     });
+
+    const [budgetData, setBudgetData] = useState({
+        categories: [
+            { id: '1', name: 'Deliveries', budget: 6500, spent: 3500 },
+            { id: '2', name: 'Marketing', budget: 5000, spent: 2000 },
+            { id: '3', name: 'Packaging', budget: 10000, spent: 1800 },
+            { id: '4', name: 'Utilities', budget: 2800, spent: 1060 },
+        ]
+    });
+
     const [currentScreen, setCurrentScreen] = useState('Dashboard');
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     const value = {
         profileData,
         setProfileData,
+        budgetData,
+        setBudgetData,
         currentScreen,
         setCurrentScreen,
         isSidebarVisible,

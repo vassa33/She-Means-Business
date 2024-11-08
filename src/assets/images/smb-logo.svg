@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- Background Circle -->
+  <circle cx="200" cy="200" r="190" fill="#FFF5F7" />
+  
+  <!-- Outer Ring representing growth -->
+  <path d="M200 20c99.411 0 180 80.589 180 180s-80.589 180-180 180S20 299.411 20 200 100.589 20 200 20" 
+        fill="none" 
+        stroke="#FF6B97" 
+        stroke-width="4"
+        stroke-dasharray="20,10" />
+  
+  <!-- Stylized Woman Figure -->
+  <path d="M200 120
+           c-20 0 -36 16 -36 36
+           c0 20 16 36 36 36
+           c20 0 36-16 36-36
+           c0-20 -16-36 -36-36"
+        fill="#FF6B97" />
+  
+  <!-- Business Suit / Dress -->
+  <path d="M200 192
+           l-40 80
+           h80
+           z"
+        fill="#FF6B97" />
+  
+  <!-- Rising Graph Line -->
+  <path d="M100 300
+           Q150 280 200 260
+           Q250 240 300 200"
+        fill="none"
+        stroke="#4A90E2"
+        stroke-width="4"
+        stroke-linecap="round" />
+  
+  <!-- Currency Symbols -->
+  <text x="120" y="240" 
+        font-family="Arial" 
+        font-size="24" 
+        fill="#4A90E2">$</text>
+  <text x="280" y="240" 
+        font-family="Arial" 
+        font-size="24" 
+        fill="#4A90E2">$</text>
+  
+  <!-- Small Business Icons -->
+  <circle cx="140" cy="160" r="15" fill="#4A90E2" opacity="0.3" />
+  <circle cx="260" cy="160" r="15" fill="#4A90E2" opacity="0.3" />
+  
+  <!-- Company Name (if needed) -->
+  <text x="200" y="350" 
+        font-family="Arial" 
+        font-weight="bold"
+        font-size="32" 
+        fill="#333333" 
+        text-anchor="middle">SMB</text>
+</svg>

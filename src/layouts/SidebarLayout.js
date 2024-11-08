@@ -1,5 +1,5 @@
 // layouts/SidebarLayout.js
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import Sidebar from '../screens/Sidebar';
 
@@ -9,12 +9,12 @@ const SidebarLayout = ({ children }) => {
     const mainContentPosition = useRef(new Animated.Value(0)).current;
     const overlayOpacity = useRef(new Animated.Value(0)).current;
 
-    const toggleSidebar = () => {
-        const toValue = isSidebarVisible ? -250 : 0;
-        const contentToValue = isSidebarVisible ? 0 : 250;
-        const opacityValue = isSidebarVisible ? 0 : 0.5;
+    const animateSidebar = (show) => {
+        const toValue = show ? 0 : -250;
+        const contentToValue = show ? 250 : 0;
+        const opacityValue = show ? 0.5 : 0;
 
-        Animated.parallel([
+        return Animated.parallel([
             Animated.timing(sidebarPosition, {
                 toValue,
                 duration: 300,
@@ -30,19 +30,32 @@ const SidebarLayout = ({ children }) => {
                 duration: 300,
                 useNativeDriver: true,
             }),
-        ]).start();
-
-        setIsSidebarVisible(!isSidebarVisible);
+        ]);
     };
+
+    const toggleSidebar = useCallback(() => {
+        const animation = animateSidebar(!isSidebarVisible);
+        animation.start(() => {
+            setIsSidebarVisible(!isSidebarVisible);
+        });
+    }, [isSidebarVisible]);
+
+    const closeSidebar = useCallback(() => {
+        if (isSidebarVisible) {
+            const animation = animateSidebar(false);
+            animation.start(() => {
+                setIsSidebarVisible(false);
+            });
+        }
+    }, [isSidebarVisible]);
 
     return (
         <View style={styles.container}>
-            {/* Overlay */}
             {isSidebarVisible && (
                 <TouchableOpacity
                     style={styles.overlay}
                     activeOpacity={1}
-                    onPress={toggleSidebar}
+                    onPress={closeSidebar}
                 >
                     <Animated.View
                         style={[
@@ -53,7 +66,6 @@ const SidebarLayout = ({ children }) => {
                 </TouchableOpacity>
             )}
 
-            {/* Animated Sidebar */}
             <Animated.View
                 style={[
                     styles.sidebarContainer,
@@ -62,12 +74,9 @@ const SidebarLayout = ({ children }) => {
                     }
                 ]}
             >
-                <Sidebar
-                    onCloseSidebar={() => setIsSidebarVisible(false)}
-                />
+                <Sidebar onCloseSidebar={closeSidebar} />
             </Animated.View>
 
-            {/* Main Content */}
             <Animated.View
                 style={[
                     styles.mainContent,
@@ -76,7 +85,13 @@ const SidebarLayout = ({ children }) => {
                     }
                 ]}
             >
-                {typeof children === 'function' ? children({ toggleSidebar }) : children}
+                {typeof children === 'function'
+                    ? children({
+                        toggleSidebar,
+                        closeSidebar,
+                        isSidebarVisible
+                    })
+                    : children}
             </Animated.View>
         </View>
     );

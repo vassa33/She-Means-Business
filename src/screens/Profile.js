@@ -10,6 +10,8 @@ import {
     ScrollView,
     Platform,
     Alert,
+    SafeAreaView,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -66,82 +68,96 @@ const Profile = () => {
     };
 
     return (
-        <ScreenLayout headerProps={screenHeaderProps}>
-            <ScrollView style={styles.content}>
-                {/* Profile Picture */}
-                <View style={styles.profilePicContainer}>
-                    <TouchableOpacity onPress={pickImage}>
-                        {profileData.profilePic ? (
-                            <Image
-                                source={{ uri: profileData.profilePic }}
-                                style={styles.profilePic}
+        <SafeAreaView style={styles.safeArea}>
+            <>
+                <StatusBar
+                    barStyle="dark-content"
+                    backgroundColor="#fff"
+                    translucent={true}
+                />
+                <ScreenLayout headerProps={screenHeaderProps}>
+                    <ScrollView style={styles.content}>
+                        {/* Profile Picture */}
+                        <View style={styles.profilePicContainer}>
+                            <TouchableOpacity onPress={pickImage}>
+                                {profileData.profilePic ? (
+                                    <Image
+                                        source={{ uri: profileData.profilePic }}
+                                        style={styles.profilePic}
+                                    />
+                                ) : (
+                                    <View style={styles.placeholderImage}>
+                                        <Ionicons name="person" size={50} color="#666" />
+                                    </View>
+                                )}
+                                <View style={styles.changePhotoButton}>
+                                    <Ionicons name="camera" size={20} color="#007AFF" />
+                                    <Text style={styles.changePhotoText}>Change Photo</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Profile Information */}
+                        <View style={styles.infoContainer}>
+                            {[
+                                { label: 'Name', key: 'name', icon: 'person-outline' },
+                                { label: 'Business', key: 'business', icon: 'business-outline' },
+                                { label: 'Phone', key: 'phone', icon: 'call-outline', keyboardType: 'phone-pad' },
+                            ].map((item) => (
+                                <View key={item.key} style={styles.infoItem}>
+                                    <View style={styles.labelContainer}>
+                                        <Ionicons name={item.icon} size={20} color="#666" />
+                                        <Text style={styles.infoLabel}>{item.label}:</Text>
+                                    </View>
+                                    {isEditing ? (
+                                        <TextInput
+                                            style={styles.input}
+                                            value={profileData[item.key]}
+                                            onChangeText={(text) =>
+                                                setProfileData({ ...profileData, [item.key]: text })
+                                            }
+                                            keyboardType={item.keyboardType || 'default'}
+                                        />
+                                    ) : (
+                                        <Text style={styles.infoText}>{profileData[item.key]}</Text>
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Edit Profile Button */}
+                        <TouchableOpacity
+                            style={[
+                                styles.editButton,
+                                isEditing && styles.saveButton
+                            ]}
+                            onPress={handleEdit}
+                        >
+                            <Ionicons
+                                name={isEditing ? "checkmark-circle-outline" : "create-outline"}
+                                size={20}
+                                color="#fff"
                             />
-                        ) : (
-                            <View style={styles.placeholderImage}>
-                                <Ionicons name="person" size={50} color="#666" />
-                            </View>
-                        )}
-                        <View style={styles.changePhotoButton}>
-                            <Ionicons name="camera" size={20} color="#007AFF" />
-                            <Text style={styles.changePhotoText}>Change Photo</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                            <Text style={styles.editButtonText}>
+                                {isEditing ? 'Save Profile' : 'Edit Profile'}
+                            </Text>
+                        </TouchableOpacity>
 
-                {/* Profile Information */}
-                <View style={styles.infoContainer}>
-                    {[
-                        { label: 'Name', key: 'name', icon: 'person-outline' },
-                        { label: 'Business', key: 'business', icon: 'business-outline' },
-                        { label: 'Phone', key: 'phone', icon: 'call-outline', keyboardType: 'phone-pad' },
-                    ].map((item) => (
-                        <View key={item.key} style={styles.infoItem}>
-                            <View style={styles.labelContainer}>
-                                <Ionicons name={item.icon} size={20} color="#666" />
-                                <Text style={styles.infoLabel}>{item.label}:</Text>
-                            </View>
-                            {isEditing ? (
-                                <TextInput
-                                    style={styles.input}
-                                    value={profileData[item.key]}
-                                    onChangeText={(text) =>
-                                        setProfileData({ ...profileData, [item.key]: text })
-                                    }
-                                    keyboardType={item.keyboardType || 'default'}
-                                />
-                            ) : (
-                                <Text style={styles.infoText}>{profileData[item.key]}</Text>
-                            )}
-                        </View>
-                    ))}
-                </View>
-
-                {/* Edit Profile Button */}
-                <TouchableOpacity
-                    style={[
-                        styles.editButton,
-                        isEditing && styles.saveButton
-                    ]}
-                    onPress={handleEdit}
-                >
-                    <Ionicons
-                        name={isEditing ? "checkmark-circle-outline" : "create-outline"}
-                        size={20}
-                        color="#fff"
-                    />
-                    <Text style={styles.editButtonText}>
-                        {isEditing ? 'Save Profile' : 'Edit Profile'}
-                    </Text>
-                </TouchableOpacity>
-
-                {/* App Version */}
-                <Text style={styles.versionText}>App Version: 1.0.0</Text>
-            </ScrollView>
-        </ScreenLayout>
+                        {/* App Version */}
+                        <Text style={styles.versionText}>App Version: 1.0.0</Text>
+                    </ScrollView>
+                </ScreenLayout>
+            </>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
     content: {
         flex: 1,
     },

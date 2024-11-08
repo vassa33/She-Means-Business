@@ -1,18 +1,29 @@
-// components/Sidebar.js
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppContext } from '../context/AppContext';
 
 const Sidebar = () => {
     const navigation = useNavigation();
+    const route = useRoute();
     const {
         profileData,
         currentScreen,
         setCurrentScreen,
         setIsSidebarVisible
     } = useAppContext();
+
+    // Add navigation state listener
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('state', () => {
+            // Close sidebar whenever navigation state changes
+            setIsSidebarVisible(false);
+        });
+
+        // Cleanup subscription on unmount
+        return unsubscribe;
+    }, [navigation, setIsSidebarVisible]);
 
     const menuItems = [
         { name: 'Dashboard', icon: 'home' },
@@ -26,9 +37,16 @@ const Sidebar = () => {
     ];
 
     const handleNavigation = (screenName) => {
+        const routeName = screenName.replace(/\s+/g, '');
         setCurrentScreen(screenName);
+
+        // Only navigate if we're not already on the screen
+        if (route.name !== routeName) {
+            navigation.navigate(routeName);
+        }
+
+        // Close sidebar after navigation is triggered
         setIsSidebarVisible(false);
-        navigation.navigate(screenName.replace(/\s+/g, ''));
     };
 
     return (

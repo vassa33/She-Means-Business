@@ -6,7 +6,10 @@ import {
     ScrollView,
     Animated,
     TouchableOpacity,
-    useWindowDimensions,
+    Platform,
+    Dimensions,
+    SafeAreaView,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
@@ -54,9 +57,8 @@ const FeatureCard = ({ icon, title, description, delay }) => {
 
 const About = () => {
     const { setCurrentScreen } = useAppContext();
-    const [showAboutTooltip, setShowAboutTooltip] = useState(false);
-    const { width } = useWindowDimensions();
     const [activeSection, setActiveSection] = useState('features');
+    const windowHeight = Dimensions.get('window').height;
 
     useEffect(() => {
         setCurrentScreen('About');
@@ -95,34 +97,6 @@ const About = () => {
         }
     ];
 
-    const screenHeaderProps = {
-        title: "About SMB App"
-    };
-
-    const renderTabButton = (tabName, label, icon) => (
-        <TouchableOpacity
-            style={[
-                styles.tabButton,
-                activeSection === tabName && styles.activeTabButton,
-            ]}
-            onPress={() => setActiveSection(tabName)}
-        >
-            <Ionicons
-                name={icon}
-                size={24}
-                color={activeSection === tabName ? '#007AFF' : '#666'}
-            />
-            <Text
-                style={[
-                    styles.tabButtonText,
-                    activeSection === tabName && styles.activeTabButtonText,
-                ]}
-            >
-                {label}
-            </Text>
-        </TouchableOpacity>
-    );
-
     const testimonials = [
         {
             quote: "SMB App transformed how I manage my business finances.",
@@ -151,94 +125,173 @@ const About = () => {
         }
     ];
 
-    return (
-        <ScreenLayout headerProps={screenHeaderProps}>
-            <View style={styles.container}>
-                <View style={styles.tabContainer}>
-                    {renderTabButton('features', 'Features', 'grid-outline')}
-                    {renderTabButton('mission', 'Our Mission', 'flag-outline')}
+    const screenHeaderProps = {
+        title: "About SMB App"
+    };
+
+    const renderTabButton = (tabName, label, icon) => (
+        <TouchableOpacity
+            style={[
+                styles.tabButton,
+                activeSection === tabName && styles.activeTabButton,
+            ]}
+            onPress={() => setActiveSection(tabName)}
+        >
+            <Ionicons
+                name={icon}
+                size={24}
+                color={activeSection === tabName ? '#007AFF' : '#666'}
+            />
+            <Text
+                style={[
+                    styles.tabButtonText,
+                    activeSection === tabName && styles.activeTabButtonText,
+                ]}
+            >
+                {label}
+            </Text>
+        </TouchableOpacity>
+    );
+
+    const renderContent = () => (
+        <>
+            {activeSection === 'features' && (
+                <View style={styles.sectionContainer}>
+                    <Text style={styles.welcomeText}>
+                        Welcome to <Text style={styles.highlightText}>SMB App</Text>
+                    </Text>
+                    <Text style={styles.subtitleText}>
+                        Your Smart Financial Management Partner
+                    </Text>
+
+                    <View style={styles.featureGrid}>
+                        {features.map((feature, index) => (
+                            <FeatureCard
+                                key={feature.title}
+                                {...feature}
+                                delay={index * 200}
+                            />
+                        ))}
+                    </View>
                 </View>
+            )}
 
-                <ScrollView
-                    style={styles.content}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {activeSection === 'features' && (
-                        <View style={styles.sectionContainer}>
-                            <Text style={styles.welcomeText}>
-                                Welcome to <Text style={styles.highlightText}>SMB App</Text>
-                            </Text>
-                            <Text style={styles.subtitleText}>
-                                Your Smart Financial Management Partner
-                            </Text>
+            {activeSection === 'mission' && (
+                <View style={styles.sectionContainer}>
+                    <Text style={styles.missionTitle}>Our Mission</Text>
+                    <Text style={styles.missionText}>
+                        At SMB, we're about empowering you—the bold, innovative, and unstoppable entrepreneurs! Whether you're just starting or already a pro, SMB is designed to give you the tool to take charge of your business's financial future. 📊🚀{'\n\n'}
+                        Our mission is simple: Every small business deserves the right resources to succeed. That's why we've created a simple yet powerful financial management toolkit that helps you plan, budget, track, and make decisions that drive growth. 🎯✨{'\n\n'}
+                        Let's turn those big dreams into thriving realities, one smart decision at a time!
+                    </Text>
 
-                            <View style={styles.featureGrid}>
-                                {features.map((feature, index) => (
-                                    <FeatureCard
-                                        key={feature.title}
-                                        {...feature}
-                                        delay={index * 200}
-                                    />
-                                ))}
-                            </View>
+                    <View style={styles.statsContainer}>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>10K+</Text>
+                            <Text style={styles.statLabel}>Businesses Helped</Text>
                         </View>
-                    )}
-
-                    {activeSection === 'mission' && (
-                        <View style={styles.sectionContainer}>
-                            <Text style={styles.missionTitle}>Our Mission</Text>
-                            <Text style={styles.missionText}>
-                                At SMB, we’re about empowering you—the bold, innovative, and unstoppable entrepreneurs! Whether you’re just starting or already a pro, SMB is designed to give you the tool to take charge of your business's financial future. 📊🚀
-
-                                Our mission is simple: Every small business deserves the right resources to succeed. That’s why we’ve created a simple yet powerful financial management toolkit that helps you plan, budget, track, and make decisions that drive growth. 🎯✨
-
-                                Let’s turn those big dreams into thriving realities, one smart decision at a time!
-                            </Text>
-
-                            <View style={styles.statsContainer}>
-                                <View style={styles.statCard}>
-                                    <Text style={styles.statNumber}>10K+</Text>
-                                    <Text style={styles.statLabel}>Businesses Helped</Text>
-                                </View>
-                                <View style={styles.statCard}>
-                                    <Text style={styles.statNumber}>$50M+</Text>
-                                    <Text style={styles.statLabel}>Managed Monthly</Text>
-                                </View>
-                                <View style={styles.statCard}>
-                                    <Text style={styles.statNumber}>4.8⭐</Text>
-                                    <Text style={styles.statLabel}>User Rating</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.testimonialSection}>
-                                <Text style={styles.testimonialTitle}>What Our Users Say</Text>
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.testimonialContainer}
-                                >
-                                    {testimonials.map((testimonial, index) => (
-                                        <View key={index} style={styles.testimonialCard}>
-                                            <Ionicons name='person-outline' size={24} color="#007AFF" />
-                                            <Text style={styles.testimonialQuote}>{testimonial.quote}</Text>
-                                            <Text style={styles.testimonialAuthor}>{testimonial.author}</Text>
-                                            <Text style={styles.testimonialBusiness}>{testimonial.business}</Text>
-                                        </View>
-                                    ))}
-                                </ScrollView>
-                            </View>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>$50M+</Text>
+                            <Text style={styles.statLabel}>Managed Monthly</Text>
                         </View>
-                    )}
-                </ScrollView>
-            </View>
-        </ScreenLayout>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>4.8⭐</Text>
+                            <Text style={styles.statLabel}>User Rating</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.testimonialSection}>
+                        <Text style={styles.testimonialTitle}>What Our Users Say</Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.testimonialContainer}
+                        >
+                            {testimonials.map((testimonial, index) => (
+                                <View key={index} style={styles.testimonialCard}>
+                                    <Ionicons name='person-outline' size={24} color="#007AFF" />
+                                    <Text style={styles.testimonialQuote}>{testimonial.quote}</Text>
+                                    <Text style={styles.testimonialAuthor}>{testimonial.author}</Text>
+                                    <Text style={styles.testimonialBusiness}>{testimonial.business}</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            )}
+        </>
+    );
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <>
+                <StatusBar
+                    barStyle="dark-content"
+                    backgroundColor="#fff"
+                    translucent={true}
+                />
+                <ScreenLayout headerProps={screenHeaderProps}>
+                    <View style={styles.mainContainer}>
+                        <View style={styles.tabContainer}>
+                            {renderTabButton('features', 'Features', 'grid-outline')}
+                            {renderTabButton('mission', 'Our Mission', 'flag-outline')}
+                        </View>
+
+                        <View style={styles.contentContainer}>
+                            <ScrollView
+                                style={styles.scrollView}
+                                contentContainerStyle={styles.scrollViewContent}
+                                showsVerticalScrollIndicator={true}
+                                bounces={true}
+                            >
+                                {renderContent()}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </ScreenLayout>
+            </>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
         backgroundColor: '#fff',
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    mainContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    contentContainer: {
+        flex: 1,
+        ...Platform.select({
+            web: {
+                height: 'calc(100vh - 120px)', // Adjust based on header height
+                overflow: 'hidden',
+            },
+            default: {
+                flex: 1,
+            },
+        }),
+    },
+    scrollView: {
+        flex: 1,
+        width: '100%',
+        ...Platform.select({
+            web: {
+                overflowY: 'auto',
+            },
+        }),
+    },
+    scrollViewContent: {
+        flexGrow: 1,
+        ...Platform.select({
+            web: {
+                minHeight: '100%',
+            },
+        }),
     },
     tabContainer: {
         flexDirection: 'row',
@@ -246,6 +299,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
+        zIndex: 1,
     },
     tabButton: {
         flex: 1,
@@ -269,11 +323,15 @@ const styles = StyleSheet.create({
         color: '#007AFF',
         fontWeight: '500',
     },
-    content: {
-        flex: 1,
-    },
     sectionContainer: {
         padding: 20,
+        ...Platform.select({
+            web: {
+                maxWidth: 1200,
+                alignSelf: 'center',
+                width: '100%',
+            },
+        }),
     },
     welcomeText: {
         fontSize: 28,
@@ -295,9 +353,17 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'space-between',
         marginTop: 20,
+        ...Platform.select({
+            web: {
+                gap: 20,
+            },
+        }),
     },
     featureCard: {
-        width: '48%',
+        width: Platform.select({
+            web: 'calc(50% - 10px)',
+            default: '48%',
+        }),
         backgroundColor: '#fff',
         borderRadius: 12,
         padding: 16,
@@ -347,6 +413,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         marginTop: 20,
+        flexWrap: 'wrap',
     },
     statCard: {
         alignItems: 'center',
@@ -354,6 +421,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
         borderRadius: 12,
         minWidth: 100,
+        margin: 8,
     },
     statNumber: {
         fontSize: 24,
@@ -413,7 +481,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
         marginTop: 4,
-    }
+    },
 });
 
 export default About;

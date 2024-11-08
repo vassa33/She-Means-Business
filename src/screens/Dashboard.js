@@ -7,11 +7,13 @@ import {
     TouchableOpacity,
     ScrollView,
     Dimensions,
+    StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
 import { useAppContext } from '../context/AppContext';
 import ScreenLayout from '../layouts/ScreenLayout';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const Dashboard = () => {
     const { profileData, setCurrentScreen } = useAppContext();
@@ -57,78 +59,91 @@ const Dashboard = () => {
     };
 
     return (
-        <ScreenLayout headerProps={screenHeaderProps}>
-            <ScrollView style={styles.content}>
-                {/* Welcome Section */}
-                <View style={styles.welcomeSection}>
-                    <Text style={styles.welcomeText}>Welcome back,</Text>
-                    <Text style={styles.businessName}>{profileData.business}</Text>
-                </View>
+        <>
+            <StatusBar
+                barStyle="dark-content"
+                backgroundColor="transparent"
+                translucent={true}
+            />
+            <SafeAreaView style={styles.safeArea}>
+                <ScreenLayout headerProps={screenHeaderProps}>
+                    <ScrollView style={styles.content}>
+                        {/* Welcome Section */}
+                        <View style={styles.welcomeSection}>
+                            <Text style={styles.welcomeText}>Welcome back,</Text>
+                            <Text style={styles.businessName}>{profileData.business}</Text>
+                        </View>
 
-                {/* Financial Wellbeing Chart */}
-                <View style={styles.chartContainer}>
-                    <View style={styles.chartHeader}>
-                        <Text style={styles.sectionHeader}>Financial Wellbeing</Text>
-                        <TouchableOpacity style={styles.chartOptionsButton}>
-                            <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-                        </TouchableOpacity>
-                    </View>
-                    <LineChart
-                        data={data}
-                        width={screenWidth - 40}
-                        height={220}
-                        chartConfig={{
-                            backgroundColor: "#ffffff",
-                            backgroundGradientFrom: "#ffffff",
-                            backgroundGradientTo: "#ffffff",
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-                            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            style: {
-                                borderRadius: 16
-                            },
-                            propsForDots: {
-                                r: "6",
-                                strokeWidth: "2",
-                                stroke: "#007AFF"
-                            }
-                        }}
-                        bezier
-                        style={styles.chart}
-                    />
-                </View>
+                        {/* Financial Wellbeing Chart */}
+                        <View style={styles.chartContainer}>
+                            <View style={styles.chartHeader}>
+                                <Text style={styles.sectionHeader}>Financial Wellbeing</Text>
+                                <TouchableOpacity style={styles.chartOptionsButton}>
+                                    <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                                </TouchableOpacity>
+                            </View>
+                            <LineChart
+                                data={data}
+                                width={screenWidth - 40}
+                                height={220}
+                                chartConfig={{
+                                    backgroundColor: "#ffffff",
+                                    backgroundGradientFrom: "#ffffff",
+                                    backgroundGradientTo: "#ffffff",
+                                    decimalPlaces: 0,
+                                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+                                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                                    style: {
+                                        borderRadius: 16
+                                    },
+                                    propsForDots: {
+                                        r: "6",
+                                        strokeWidth: "2",
+                                        stroke: "#007AFF"
+                                    }
+                                }}
+                                bezier
+                                style={styles.chart}
+                            />
+                        </View>
 
-                {/* Quick Access Sections */}
-                <View style={styles.quickAccessContainer}>
-                    {quickAccessItems.map((item, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.section}
-                            onPress={() => {/* Handle section press */ }}
-                        >
-                            <View style={styles.sectionIconContainer}>
-                                <Ionicons name={item.icon} size={24} color="#007AFF" />
-                            </View>
-                            <View style={styles.sectionContent}>
-                                <Text style={styles.sectionHeader}>{item.title}</Text>
-                                {Array.isArray(item.content) ? (
-                                    item.content.map((text, i) => (
-                                        <Text key={i} style={styles.sectionText}>{text}</Text>
-                                    ))
-                                ) : (
-                                    <Text style={styles.sectionText}>{item.content}</Text>
-                                )}
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color="#666" />
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </ScrollView>
-        </ScreenLayout>
+                        {/* Quick Access Sections */}
+                        <View style={styles.quickAccessContainer}>
+                            {quickAccessItems.map((item, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.section}
+                                    onPress={() => {/* Handle section press */ }}
+                                >
+                                    <View style={styles.sectionIconContainer}>
+                                        <Ionicons name={item.icon} size={24} color="#007AFF" />
+                                    </View>
+                                    <View style={styles.sectionContent}>
+                                        <Text style={styles.sectionHeader}>{item.title}</Text>
+                                        {Array.isArray(item.content) ? (
+                                            item.content.map((text, i) => (
+                                                <Text key={i} style={styles.sectionText}>{text}</Text>
+                                            ))
+                                        ) : (
+                                            <Text style={styles.sectionText}>{item.content}</Text>
+                                        )}
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color="#666" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </ScrollView>
+                </ScreenLayout>
+            </SafeAreaView>
+        </>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
     content: {
         flex: 1,
     },

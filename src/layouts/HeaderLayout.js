@@ -45,7 +45,7 @@ const HeaderLayout = ({
                             <Ionicons
                                 name="information-circle-outline"
                                 size={24}
-                                color="black"
+                                color="#007AFF"
                             />
                         </TouchableOpacity>
                     </Tooltip>
