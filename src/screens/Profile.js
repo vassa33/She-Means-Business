@@ -1,9 +1,7 @@
-// screens/Profile.js
 import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     Image,
     TextInput,
@@ -15,11 +13,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { useAppContext } from '../context/AppContext';
+import profileStyles from '../styles/ProfileStyles';
 
 const Profile = () => {
     const [isEditing, setIsEditing] = useState(false);
+    const [showDatePicker, setShowDatePicker] = useState(false);
     const { profileData, setProfileData, setCurrentScreen } = useAppContext();
 
     useEffect(() => {
@@ -63,12 +64,22 @@ const Profile = () => {
         setIsEditing(!isEditing);
     };
 
+    const handleDateChange = (event, selectedDate) => {
+        setShowDatePicker(false);
+        if (selectedDate) {
+            setProfileData(prev => ({
+                ...prev,
+                businessStartDate: selectedDate.toISOString().split('T')[0]
+            }));
+        }
+    };
+
     const screenHeaderProps = {
         title: "Profile"
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={profileStyles.safeArea}>
             <>
                 <StatusBar
                     barStyle="dark-content"
@@ -76,60 +87,102 @@ const Profile = () => {
                     translucent={true}
                 />
                 <ScreenLayout headerProps={screenHeaderProps}>
-                    <ScrollView style={styles.content}>
+                    <ScrollView style={profileStyles.content}>
                         {/* Profile Picture */}
-                        <View style={styles.profilePicContainer}>
+                        <View style={profileStyles.profilePicContainer}>
                             <TouchableOpacity onPress={pickImage}>
                                 {profileData.profilePic ? (
                                     <Image
                                         source={{ uri: profileData.profilePic }}
-                                        style={styles.profilePic}
+                                        style={profileStyles.profilePic}
                                     />
                                 ) : (
-                                    <View style={styles.placeholderImage}>
+                                    <View style={profileStyles.placeholderImage}>
                                         <Ionicons name="person" size={50} color="#666" />
                                     </View>
                                 )}
-                                <View style={styles.changePhotoButton}>
+                                <View style={profileStyles.changePhotoButton}>
                                     <Ionicons name="camera" size={20} color="#007AFF" />
-                                    <Text style={styles.changePhotoText}>Change Photo</Text>
+                                    <Text style={profileStyles.changePhotoText}>Change Photo</Text>
                                 </View>
                             </TouchableOpacity>
                         </View>
 
                         {/* Profile Information */}
-                        <View style={styles.infoContainer}>
+                        <View style={profileStyles.infoContainer}>
                             {[
                                 { label: 'Name', key: 'name', icon: 'person-outline' },
                                 { label: 'Business', key: 'business', icon: 'business-outline' },
                                 { label: 'Phone', key: 'phone', icon: 'call-outline', keyboardType: 'phone-pad' },
+                                {
+                                    label: 'Business Start Date',
+                                    key: 'businessStartDate',
+                                    icon: 'calendar-outline',
+                                    isDate: true
+                                },
                             ].map((item) => (
-                                <View key={item.key} style={styles.infoItem}>
-                                    <View style={styles.labelContainer}>
+                                <View key={item.key} style={profileStyles.infoItem}>
+                                    <View style={profileStyles.labelContainer}>
                                         <Ionicons name={item.icon} size={20} color="#666" />
-                                        <Text style={styles.infoLabel}>{item.label}:</Text>
+                                        <Text style={profileStyles.infoLabel}>{item.label}:</Text>
                                     </View>
                                     {isEditing ? (
-                                        <TextInput
-                                            style={styles.input}
-                                            value={profileData[item.key]}
-                                            onChangeText={(text) =>
-                                                setProfileData({ ...profileData, [item.key]: text })
-                                            }
-                                            keyboardType={item.keyboardType || 'default'}
-                                        />
+                                        item.isDate ? (
+                                            <TouchableOpacity
+                                                style={profileStyles.dateInput}
+                                                onPress={() => setShowDatePicker(true)}
+                                            >
+                                                <Text>{profileData[item.key] || 'Select date'}</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TextInput
+                                                style={profileStyles.input}
+                                                value={profileData[item.key]}
+                                                onChangeText={(text) =>
+                                                    setProfileData({ ...profileData, [item.key]: text })
+                                                }
+                                                keyboardType={item.keyboardType || 'default'}
+                                            />
+                                        )
                                     ) : (
-                                        <Text style={styles.infoText}>{profileData[item.key]}</Text>
+                                        <Text style={profileStyles.infoText}>
+                                            {profileData[item.key] || 'Not set'}
+                                        </Text>
                                     )}
                                 </View>
                             ))}
+
+                            {/* Business Bio/Info Section */}
+                            <View style={profileStyles.infoItem}>
+                                <View style={profileStyles.labelContainer}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#666" />
+                                    <Text style={profileStyles.infoLabel}>Business Info:</Text>
+                                </View>
+                                {isEditing ? (
+                                    <TextInput
+                                        style={[profileStyles.input, profileStyles.textArea]}
+                                        value={profileData.businessBio}
+                                        onChangeText={(text) =>
+                                            setProfileData({ ...profileData, businessBio: text })
+                                        }
+                                        multiline
+                                        numberOfLines={4}
+                                        placeholder="Tell us about your business (e.g., services offered, mission statement, unique value proposition)"
+                                        placeholderTextColor="#999"
+                                    />
+                                ) : (
+                                    <Text style={profileStyles.infoText}>
+                                        {profileData.businessBio || 'No business information provided'}
+                                    </Text>
+                                )}
+                            </View>
                         </View>
 
                         {/* Edit Profile Button */}
                         <TouchableOpacity
                             style={[
-                                styles.editButton,
-                                isEditing && styles.saveButton
+                                profileStyles.editButton,
+                                isEditing && profileStyles.saveButton
                             ]}
                             onPress={handleEdit}
                         >
@@ -138,113 +191,28 @@ const Profile = () => {
                                 size={20}
                                 color="#fff"
                             />
-                            <Text style={styles.editButtonText}>
+                            <Text style={profileStyles.editButtonText}>
                                 {isEditing ? 'Save Profile' : 'Edit Profile'}
                             </Text>
                         </TouchableOpacity>
 
                         {/* App Version */}
-                        <Text style={styles.versionText}>App Version: 1.0.0</Text>
+                        <Text style={profileStyles.versionText}>App Version: 1.0.0</Text>
                     </ScrollView>
                 </ScreenLayout>
+
+                {/* Date Picker Modal */}
+                {showDatePicker && (
+                    <DateTimePicker
+                        value={profileData.businessStartDate ? new Date(profileData.businessStartDate) : new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={handleDateChange}
+                    />
+                )}
             </>
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    content: {
-        flex: 1,
-    },
-    profilePicContainer: {
-        alignItems: 'center',
-        marginVertical: 20,
-    },
-    profilePic: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        marginBottom: 10,
-    },
-    placeholderImage: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#f0f0f0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    changePhotoButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f8f8f8',
-        padding: 10,
-        borderRadius: 20,
-        gap: 5,
-    },
-    changePhotoText: {
-        color: '#007AFF',
-        fontSize: 14,
-    },
-    infoContainer: {
-        padding: 20,
-    },
-    infoItem: {
-        marginBottom: 20,
-    },
-    labelContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 5,
-        gap: 5,
-    },
-    infoLabel: {
-        fontSize: 14,
-        color: '#666',
-    },
-    infoText: {
-        fontSize: 16,
-        color: '#333',
-        paddingVertical: 8,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 8,
-        fontSize: 16,
-        backgroundColor: '#fff',
-    },
-    editButton: {
-        flexDirection: 'row',
-        backgroundColor: '#007AFF',
-        padding: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginHorizontal: 20,
-        marginBottom: 20,
-        gap: 10,
-    },
-    saveButton: {
-        backgroundColor: '#34C759',
-    },
-    editButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    versionText: {
-        textAlign: 'center',
-        color: '#888',
-        marginBottom: 20,
-    },
-});
 
 export default Profile;

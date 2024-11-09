@@ -1,5 +1,4 @@
-// screens/Dashboard.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -18,45 +17,49 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const Dashboard = () => {
     const { profileData, setCurrentScreen } = useAppContext();
     const screenWidth = Dimensions.get("window").width;
+    const [goalProgress, setGoalProgress] = useState(65); // Example progress
 
     useEffect(() => {
         setCurrentScreen('Dashboard');
     }, []);
 
-    // Sample data for the financial overview chart
-    const data = {
-        labels: ["Jan", "Feb", "Mar", "Apr", "May"],
-        datasets: [
-            {
-                data: [5000, 10000, 7500, 12000, 9000],
-                color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-                strokeWidth: 2
-            }
-        ],
-        legend: ["Financial Overview"]
-    };
-
-    const quickAccessItems = [
+    // Key metrics that provide unique insights not found in other screens
+    const businessInsights = [
         {
-            title: 'Business Start Date',
-            content: 'January 1, 2020',
-            icon: 'calendar-outline'
+            title: 'Next Goal',
+            content: `${goalProgress}% towards ${profileData.currentGoal || 'Monthly Revenue Target'}`,
+            icon: 'trophy-outline',
+            type: 'progress'
         },
         {
-            title: 'Sales Overview',
-            content: 'Total Sales: Ksh 1,200,000',
-            icon: 'cash-outline'
+            title: 'Quick Actions',
+            content: ['Record Sale', 'Add Expense', 'Set Reminder'],
+            icon: 'flash-outline',
+            type: 'actions'
         },
         {
-            title: 'P&L Summary',
-            content: ['Net Profit: Ksh 400,000', 'Expenses: Ksh 800,000'],
-            icon: 'stats-chart-outline'
+            title: 'Business Health',
+            content: 'Strong Growth',
+            subtitle: 'Based on last 30 days',
+            icon: 'pulse-outline',
+            type: 'health'
         }
     ];
 
-    const screenHeaderProps = {
-        title: "Dashboard"
-    };
+    // Upcoming activities and deadlines
+    const upcomingItems = [
+        {
+            title: 'Tax Payment Due',
+            date: '2024-11-15',
+            type: 'deadline'
+        },
+        {
+            title: 'Supplier Payment',
+            date: '2024-11-12',
+            amount: 'Ksh 50,000',
+            type: 'payment'
+        }
+    ];
 
     return (
         <>
@@ -66,69 +69,78 @@ const Dashboard = () => {
                 translucent={true}
             />
             <SafeAreaView style={styles.safeArea}>
-                <ScreenLayout headerProps={screenHeaderProps}>
+                <ScreenLayout headerProps={{ title: "Dashboard" }}>
                     <ScrollView style={styles.content}>
-                        {/* Welcome Section */}
+                        {/* Personalized Welcome */}
                         <View style={styles.welcomeSection}>
-                            <Text style={styles.welcomeText}>Welcome back,</Text>
+                            <Text style={styles.welcomeText}>
+                                {getGreeting()}, {profileData.ownerName}
+                            </Text>
                             <Text style={styles.businessName}>{profileData.business}</Text>
                         </View>
 
-                        {/* Financial Wellbeing Chart */}
-                        <View style={styles.chartContainer}>
-                            <View style={styles.chartHeader}>
-                                <Text style={styles.sectionHeader}>Financial Wellbeing</Text>
-                                <TouchableOpacity style={styles.chartOptionsButton}>
-                                    <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-                                </TouchableOpacity>
-                            </View>
-                            <LineChart
-                                data={data}
-                                width={screenWidth - 40}
-                                height={220}
-                                chartConfig={{
-                                    backgroundColor: "#ffffff",
-                                    backgroundGradientFrom: "#ffffff",
-                                    backgroundGradientTo: "#ffffff",
-                                    decimalPlaces: 0,
-                                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-                                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                                    style: {
-                                        borderRadius: 16
-                                    },
-                                    propsForDots: {
-                                        r: "6",
-                                        strokeWidth: "2",
-                                        stroke: "#007AFF"
-                                    }
-                                }}
-                                bezier
-                                style={styles.chart}
-                            />
-                        </View>
-
-                        {/* Quick Access Sections */}
-                        <View style={styles.quickAccessContainer}>
-                            {quickAccessItems.map((item, index) => (
+                        {/* Priority Alerts */}
+                        <View style={styles.alertsSection}>
+                            {upcomingItems.map((item, index) => (
                                 <TouchableOpacity
                                     key={index}
-                                    style={styles.section}
-                                    onPress={() => {/* Handle section press */ }}
+                                    style={[styles.alertItem,
+                                    item.type === 'deadline' ? styles.alertUrgent : styles.alertNormal
+                                    ]}
                                 >
-                                    <View style={styles.sectionIconContainer}>
-                                        <Ionicons name={item.icon} size={24} color="#007AFF" />
-                                    </View>
-                                    <View style={styles.sectionContent}>
-                                        <Text style={styles.sectionHeader}>{item.title}</Text>
-                                        {Array.isArray(item.content) ? (
-                                            item.content.map((text, i) => (
-                                                <Text key={i} style={styles.sectionText}>{text}</Text>
-                                            ))
-                                        ) : (
-                                            <Text style={styles.sectionText}>{item.content}</Text>
+                                    <Ionicons
+                                        name={item.type === 'deadline' ? 'alarm-outline' : 'calendar-outline'}
+                                        size={24}
+                                        color={item.type === 'deadline' ? '#ff6b6b' : '#007AFF'}
+                                    />
+                                    <View style={styles.alertContent}>
+                                        <Text style={styles.alertTitle}>{item.title}</Text>
+                                        <Text style={styles.alertDate}>Due: {formatDate(item.date)}</Text>
+                                        {item.amount && (
+                                            <Text style={styles.alertAmount}>{item.amount}</Text>
                                         )}
                                     </View>
-                                    <Ionicons name="chevron-forward" size={20} color="#666" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Business Insights */}
+                        <View style={styles.insightsContainer}>
+                            {businessInsights.map((insight, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.insightCard}
+                                >
+                                    <View style={styles.insightHeader}>
+                                        <View style={[styles.iconContainer,
+                                        { backgroundColor: getInsightColor(insight.type) }]}>
+                                            <Ionicons name={insight.icon} size={24} color="#fff" />
+                                        </View>
+                                        <Text style={styles.insightTitle}>{insight.title}</Text>
+                                    </View>
+
+                                    {insight.type === 'progress' && (
+                                        <View style={styles.progressBar}>
+                                            <View style={[styles.progressFill, { width: `${goalProgress}%` }]} />
+                                        </View>
+                                    )}
+
+                                    {insight.type === 'actions' && (
+                                        <View style={styles.actionButtons}>
+                                            {Array.isArray(insight.content) && insight.content.map((action, i) => (
+                                                <TouchableOpacity key={i} style={styles.actionButton}>
+                                                    <Text style={styles.actionText}>{action}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    {insight.type === 'health' && (
+                                        <View style={styles.healthIndicator}>
+                                            <Text style={styles.healthText}>{insight.content}</Text>
+                                            <Text style={styles.healthSubtext}>{insight.subtitle}</Text>
+                                        </View>
+                                    )}
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -160,55 +172,136 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
     },
-    chartContainer: {
-        padding: 20,
+    alertsSection: {
+        padding: 15,
     },
-    chartHeader: {
+    alertItem: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    chartOptionsButton: {
-        padding: 5,
-    },
-    chart: {
-        marginVertical: 10,
-        borderRadius: 16,
-    },
-    quickAccessContainer: {
-        padding: 20,
-    },
-    section: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f8f8f8',
         padding: 15,
         borderRadius: 10,
+        marginBottom: 10,
+        alignItems: 'center',
+    },
+    alertUrgent: {
+        backgroundColor: '#fff5f5',
+    },
+    alertNormal: {
+        backgroundColor: '#f8f9fa',
+    },
+    alertContent: {
+        marginLeft: 15,
+        flex: 1,
+    },
+    alertTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+    },
+    alertDate: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 4,
+    },
+    alertAmount: {
+        fontSize: 14,
+        color: '#007AFF',
+        marginTop: 4,
+    },
+    insightsContainer: {
+        padding: 15,
+    },
+    insightCard: {
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    insightHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 15,
     },
-    sectionIconContainer: {
+    iconContainer: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#007AFF15',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 15,
+        marginRight: 10,
     },
-    sectionContent: {
-        flex: 1,
-    },
-    sectionHeader: {
+    insightTitle: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 5,
     },
-    sectionText: {
+    progressBar: {
+        height: 8,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: '#4CAF50',
+        borderRadius: 4,
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 10,
+    },
+    actionButton: {
+        backgroundColor: '#007AFF15',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        marginRight: 8,
+        marginBottom: 8,
+    },
+    actionText: {
+        color: '#007AFF',
         fontSize: 14,
+    },
+    healthIndicator: {
+        alignItems: 'center',
+    },
+    healthText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
+    healthSubtext: {
+        fontSize: 12,
         color: '#666',
+        marginTop: 4,
     },
 });
+
+// Helper functions
+const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+};
+
+const formatDate = (dateString) => {
+    const options = { month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+};
+
+const getInsightColor = (type) => {
+    const colors = {
+        progress: '#4CAF50',
+        actions: '#007AFF',
+        health: '#FF9800'
+    };
+    return colors[type] || '#007AFF';
+};
 
 export default Dashboard;

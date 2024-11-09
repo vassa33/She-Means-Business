@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+// ======================================
+// Imports and Dependencies
+// ======================================
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     ScrollView,
     TouchableOpacity,
     Dimensions,
@@ -11,15 +13,15 @@ import {
     TextInput,
     Alert,
     StatusBar,
-    Platform
+    Platform,
+    ActivityIndicator,
+    ScrollView as HorizontalScrollView
 } from 'react-native';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import {
     TrendingUp,
     TrendingDown,
     HelpCircle,
-    Calendar,
-    DollarSign,
     PieChart,
     ArrowUpRight,
     ArrowDownRight,
@@ -28,40 +30,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { useAppContext } from '../context/AppContext';
+import CashFlowStyles from '../styles/CashFlowStyles';
 
-// Color constants
+// ======================================
+// Constants and Configuration
+// ======================================
+
+// Color palette for the application
 const COLORS = {
     primary: '#007AFF',
+    primaryLight: 'rgba(0, 122, 255, 0.1)',
     secondary: '#81b0ff',
     gray: '#767577',
     lightGray: '#f4f3f4',
     success: '#34C759',
+    successLight: 'rgba(52, 199, 89, 0.1)',
     danger: '#FF3B30',
+    dangerLight: 'rgba(255, 59, 48, 0.1)',
     warning: '#FF9500',
     background: '#FFFFFF',
     text: '#000000',
     textSecondary: '#7F7F7F',
 };
 
-// Chart configuration
-const chartConfig = {
-    backgroundColor: COLORS.background,
-    backgroundGradientFrom: COLORS.background,
-    backgroundGradientTo: COLORS.background,
-    decimalPlaces: 0,
-    color: (opacity = 1) => COLORS.primary,
-    labelColor: (opacity = 1) => COLORS.text,
-    style: {
-        borderRadius: 16,
-    },
-    propsForDots: {
-        r: "6",
-        strokeWidth: "2",
-        stroke: COLORS.primary
-    }
-};
-
-// Tooltip content with educational information
+// Educational tooltip content
 const tooltipContent = {
     netCashFlow: {
         title: "Understanding Net Cash Flow",
@@ -98,16 +90,73 @@ const tooltipContent = {
             "Identify your peak periods",
             "Plan for slow periods",
         ]
+    },
+    inflowOutflow: {
+        title: "Inflows and Outflows Comparison",
+        description: "This chart compares your cash inflows (money coming in) with outflows (money going out) over time. The comparison helps identify periods of high expenses or strong revenue.",
+        tips: [
+            "Look for consistent patterns",
+            "Monitor the gap between inflows and outflows",
+            "Plan for periods when outflows exceed inflows",
+            "Identify seasonal trends in both flows"
+        ]
+    },
+    forecast: {
+        title: "Cash Flow Forecast",
+        description: "Predict future cash flows based on historical data and growth assumptions.",
+        tips: [
+            "Use realistic growth rates",
+            "Consider market conditions",
+            "Update regularly with actual data",
+            "Account for seasonal variations"
+        ]
     }
 };
 
-// Mock data generator function
-const generateMockData = () => {
-    const dates = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        return date.toISOString().split('T')[0];
-    }).reverse();
+// ======================================
+// Helper Functions
+// ======================================
+
+// Generate mock data for testing
+const generateMockData = (period) => {
+    let length;
+    let dateGenerator;
+
+    switch (period) {
+        case 'week':
+            length = 7;
+            dateGenerator = (i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                return date.toISOString().split('T')[0];
+            };
+            break;
+        case 'month':
+            length = 30;
+            dateGenerator = (i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                return date.toISOString().split('T')[0];
+            };
+            break;
+        case 'year':
+            length = 12;
+            dateGenerator = (i) => {
+                const date = new Date();
+                date.setMonth(date.getMonth() - i);
+                return date.toISOString().slice(0, 7);
+            };
+            break;
+        default:
+            length = 7;
+            dateGenerator = (i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                return date.toISOString().split('T')[0];
+            };
+    }
+
+    const dates = Array.from({ length }, (_, i) => dateGenerator(i)).reverse();
 
     return dates.map((date, index) => ({
         id: index.toString(),
@@ -118,8 +167,291 @@ const generateMockData = () => {
     }));
 };
 
+// Calculate projections based on current data
+const calculateProjections = (baseData, months, growth) => {
+    if (!Array.isArray(baseData) || baseData.length === 0) return [];
+    const growthRate = Number(growth) / 100 || 0;
+    const lastEntry = baseData[baseData.length - 1];
+    const projections = [];
+
+    for (let i = 1; i <= parseInt(months); i++) {
+        const projectedInflows = lastEntry.inflows * Math.pow(1 + growthRate, i);
+        const projectedOutflows = lastEntry.outflows * Math.pow(1 + (growthRate * 0.8), i);
+        projections.push({
+            id: `proj_${i}`,
+            date: `Projection ${i}`,
+            inflows: projectedInflows,
+            outflows: projectedOutflows,
+            category: 'Projected'
+        });
+    }
+
+    return projections;
+};
+
+// ======================================
+// Sub-Components
+// ======================================
+
+// Enhanced chart component with horizontal scroll
+const ScrollableChart = React.memo(({ children, height, yAxis, legend }) => {
+    const [scrollEnabled, setScrollEnabled] = useState(true);
+
+    return (
+        <View style={{ height, flexDirection: 'row' }}>
+            {/* Fixed Y-Axis */}
+            <View style={{ width: 50 }}>
+                {yAxis}
+            </View>
+
+            {/* Scrollable Chart Area */}
+            <View style={{ flex: 1 }}>
+                {legend}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={true}
+                    scrollEnabled={scrollEnabled}
+                    onScrollBeginDrag={() => setScrollEnabled(true)}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ paddingRight: 20, paddingTop: 40 }}
+                >
+                    {children}
+                </ScrollView>
+            </View>
+        </View>
+    );
+});
+
+const formatXAxisLabel = (date, period) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weeks = ['week 1', 'week 2', 'week 3', 'week 4', 'week 5', 'week 6', 'week 7'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (period === 'week') {
+        const dayIndex = new Date(date).getDay();
+        return days[dayIndex];
+    } else if (period === 'month') {
+        return date.slice(-2); // Day of month
+    } else if (period === 'year') {
+        const monthIndex = parseInt(date.slice(5, 7)) - 1;
+        return months[monthIndex];
+    }
+    return date;
+};
+
+const DataPointTooltip = ({ value, date, visible, position }) => {
+    if (!visible) return null;
+
+    return (
+        <View
+            style={{
+                position: 'absolute',
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                padding: 8,
+                borderRadius: 4,
+                left: position.x - 50,
+                top: position.y - 60,
+                zIndex: 999,
+            }}
+        >
+            <Text style={{ color: 'white', fontSize: 12 }}>
+                Date: {date}
+            </Text>
+            <Text style={{ color: 'white', fontSize: 12 }}>
+                Value: Ksh {value.toLocaleString()}
+            </Text>
+        </View>
+    );
+};
+
+const ChartLegend = ({ datasets, colors }) => (
+    <View style={{
+        flexDirection: 'row',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        backgroundColor: 'white',
+        position: 'absolute',
+        top: 0,
+        left: 50,
+        right: 0,
+        zIndex: 999,
+    }}>
+        {datasets.map((dataset, index) => (
+            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+                <View style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    backgroundColor: colors[index],
+                    marginRight: 4,
+                }} />
+                <Text style={{ fontSize: 12, color: '#666' }}>{dataset}</Text>
+            </View>
+        ))}
+    </View>
+);
+
+// Projection Modal Component
+const ProjectionModal = ({ visible, onClose, onApply }) => {
+    const [forecastPeriod, setForecastPeriod] = useState('3');
+    const [growthRate, setGrowthRate] = useState('5');
+    const [errors, setErrors] = useState({});
+
+    const validateInputs = () => {
+        const newErrors = {};
+        if (isNaN(forecastPeriod) || forecastPeriod < 1 || forecastPeriod > 12) {
+            newErrors.forecastPeriod = 'Please enter a number between 1 and 12';
+        }
+        if (isNaN(growthRate) || growthRate < -100 || growthRate > 100) {
+            newErrors.growthRate = 'Please enter a number between -100 and 100';
+        }
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = () => {
+        if (validateInputs()) {
+            onApply({ forecastPeriod, growthRate });
+            onClose();
+        }
+    };
+
+    return (
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            <View style={CashFlowStyles.modalOverlay}>
+                <View style={CashFlowStyles.projectionModalContainer}>
+                    <View style={CashFlowStyles.modalHeader}>
+                        <Text style={CashFlowStyles.projectionModalTitle}>
+                            Cash Flow Forecast Settings
+                        </Text>
+                        <TouchableOpacity onPress={onClose}>
+                            <X color={COLORS.text} size={24} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={CashFlowStyles.modalContent}>
+                        <View style={CashFlowStyles.inputGroup}>
+                            <Text style={CashFlowStyles.inputLabel}>Forecast Period (1-12 months):</Text>
+                            <TextInput
+                                style={[
+                                    CashFlowStyles.input,
+                                    errors.forecastPeriod && CashFlowStyles.inputError
+                                ]}
+                                keyboardType="numeric"
+                                value={forecastPeriod}
+                                onChangeText={setForecastPeriod}
+                                maxLength={2}
+                            />
+                            {errors.forecastPeriod && (
+                                <Text style={CashFlowStyles.errorText}>{errors.forecastPeriod}</Text>
+                            )}
+                        </View>
+                        <View style={CashFlowStyles.inputGroup}>
+                            <Text style={CashFlowStyles.inputLabel}>Growth Rate (-100 to 100%):</Text>
+                            <TextInput
+                                style={[
+                                    CashFlowStyles.input,
+                                    errors.growthRate && CashFlowStyles.inputError
+                                ]}
+                                keyboardType="numeric"
+                                value={growthRate}
+                                onChangeText={setGrowthRate}
+                                maxLength={4}
+                            />
+                            {errors.growthRate && (
+                                <Text style={CashFlowStyles.errorText}>{errors.growthRate}</Text>
+                            )}
+                        </View>
+                        <TouchableOpacity
+                            style={CashFlowStyles.projectionModalButton}
+                            onPress={handleSubmit}
+                        >
+                            <Text style={CashFlowStyles.projectionModalButtonText}>
+                                Apply Forecast Settings
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+};
+
+// Chart Type Selector Component
+const ChartTypeSelector = ({ selectedChart, setSelectedChart }) => (
+    <View style={CashFlowStyles.chartTypeSelector}>
+        <TouchableOpacity
+            style={[
+                CashFlowStyles.chartTypeButton,
+                selectedChart === 'line' && CashFlowStyles.chartTypeButtonActive
+            ]}
+            onPress={() => setSelectedChart('line')}
+        >
+            <Text
+                style={[
+                    CashFlowStyles.chartTypeText,
+                    selectedChart === 'line' && CashFlowStyles.chartTypeTextActive
+                ]}
+            >
+                Line
+            </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+            style={[
+                CashFlowStyles.chartTypeButton,
+                selectedChart === 'bar' && CashFlowStyles.chartTypeButtonActive
+            ]}
+            onPress={() => setSelectedChart('bar')}
+        >
+            <Text
+                style={[
+                    CashFlowStyles.chartTypeText,
+                    selectedChart === 'bar' && CashFlowStyles.chartTypeTextActive
+                ]}
+            >
+                Bar
+            </Text>
+        </TouchableOpacity>
+    </View>
+);
+
+// Period Selector Component
+const PeriodSelector = ({ selectedPeriod, setSelectedPeriod }) => (
+    <View style={CashFlowStyles.periodSelector}>
+        {['week', 'month', 'year'].map((period) => (
+            <TouchableOpacity
+                key={period}
+                style={[
+                    CashFlowStyles.periodButton,
+                    selectedPeriod === period && CashFlowStyles.periodButtonActive
+                ]}
+                onPress={() => setSelectedPeriod(period)}
+            >
+                <Text
+                    style={[
+                        CashFlowStyles.periodButtonText,
+                        selectedPeriod === period && CashFlowStyles.periodButtonTextActive
+                    ]}
+                >
+                    {period.charAt(0).toUpperCase() + period.slice(1)}
+                </Text>
+            </TouchableOpacity>
+        ))}
+    </View>
+);
+
+// ======================================
+// Main Component
+// ======================================
+
 const CashFlow = () => {
-    const screenWidth = Dimensions.get("window").width;
+    // ----------------
+    // State Management
+    // ----------------
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [cashFlowData, setCashFlowData] = useState([]);
@@ -134,47 +466,102 @@ const CashFlow = () => {
 
     const { setCurrentScreen } = useAppContext();
 
-    useEffect(() => {
+    // ----------------
+    // Effects
+    // ----------------
+    React.useEffect(() => {
         setCurrentScreen('CashFlow');
+
+        // Fetch mock data
+        try {
+            setIsLoading(true);
+            const data = generateMockData();
+            if (!Array.isArray(data) || data.length === 0) {
+                throw new Error('Invalid data format');
+            }
+            setCashFlowData(data);
+        } catch (err) {
+            setError('Failed to load cash flow data. Please try again later.');
+            Alert.alert('Error', 'Failed to load cash flow data');
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
 
+    // Enhanced useEffect for data fetching
     useEffect(() => {
+        let retryCount = 0;
+        const maxRetries = 3;
+
         const fetchCashFlowData = async () => {
             try {
                 setIsLoading(true);
-                const data = generateMockData();
+                const data = generateMockData(selectedPeriod);
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error('Invalid data format');
+                }
                 setCashFlowData(data);
-                setIsLoading(false);
             } catch (err) {
-                setError('Failed to load cash flow data');
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(fetchCashFlowData, 1000 * retryCount);
+                } else {
+                    setError('Failed to load cash flow data. Please try again later.');
+                    Alert.alert('Error', 'Failed to load cash flow data');
+                }
+            } finally {
                 setIsLoading(false);
-                Alert.alert('Error', 'Could not load cash flow information');
             }
         };
 
         fetchCashFlowData();
-    }, []);
+    }, [selectedPeriod]); // Re-fetch when period changes
 
-    // Enhanced chart data preparation with projections
-    const { netCashFlowData, inflowOutflowData } = useMemo(() => {
-        let dataToUse = cashFlowData;
+    useEffect(() => {
+        return () => {
+            tooltipFadeAnim.setValue(0);
+        };
+    }, [tooltipFadeAnim]);
+
+    // ----------------
+    // Memoized Values
+    // ----------------
+    const screenWidth = useMemo(() => Platform.OS === 'web' ? 500 : Dimensions.get('window').width, []);
+
+    const { netCashFlowData, inflowOutflowData, yAxisLabels } = useMemo(() => {
+        let dataToUse = cashFlowData || [];
         if (showProjections) {
             const projections = calculateProjections(cashFlowData, forecastPeriod, growthRate);
             dataToUse = [...cashFlowData, ...projections];
         }
 
+        // Calculate max value for y-axis scale
+        const maxValue = Math.max(
+            ...dataToUse.map(item => Math.max(item.inflows, item.outflows))
+        );
+        const yAxisStep = Math.ceil(maxValue / 5 / 1000) * 1000;
+        const yLabels = Array.from({ length: 6 }, (_, i) => (yAxisStep * i).toLocaleString());
+
         return {
             netCashFlowData: {
-                labels: dataToUse.map(item => item.date.slice(-2)),
+                labels: dataToUse.map(item =>
+                    selectedPeriod === 'year'
+                        ? item.date.slice(5, 7)
+                        : item.date.slice(-2)
+                ),
                 datasets: [{
                     data: dataToUse.map(item => Math.max(0, item.inflows - item.outflows)),
                     color: (opacity = 1) => COLORS.success,
                     strokeWidth: 2
                 }],
-                legend: ["Net Cash Flow"]
+                //legend: ["Net Cash Flow"]
             },
             inflowOutflowData: {
-                labels: dataToUse.map(item => item.date.slice(-2)),
+                labels: dataToUse.map(item =>
+                    selectedPeriod === 'year'
+                        ? item.date.slice(5, 7)
+                        : item.date.slice(-2)
+                ),
                 datasets: [
                     {
                         data: dataToUse.map(item => item.inflows),
@@ -185,13 +572,79 @@ const CashFlow = () => {
                         color: (opacity = 1) => COLORS.danger,
                     }
                 ],
-                legend: ["Inflows", "Outflows"]
-            }
+                //legend: ["Inflows", "Outflows"]
+            },
+            yAxisLabels: yLabels
         };
-    }, [cashFlowData, showProjections, forecastPeriod, growthRate]);
+    }, [cashFlowData, showProjections, forecastPeriod, growthRate, selectedPeriod]);
 
-    // Enhanced totals calculation with projections
-    const calculateTotals = () => {
+    // Chart configuration settings
+    const chartConfig = useMemo(() => ({
+        backgroundColor: COLORS.background,
+        backgroundGradientFrom: COLORS.background,
+        backgroundGradientTo: COLORS.background,
+        decimalPlaces: 0,
+        color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+        labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+        style: {
+            borderRadius: 16,
+        },
+        propsForDots: {
+            r: "6",
+            strokeWidth: "2",
+            stroke: COLORS.primary
+        },
+        propsForBackgroundLines: {
+            strokeDasharray: '',
+            stroke: "rgba(0, 0, 0, 0.1)",
+            strokeWidth: 1
+        },
+        propsForLabels: {
+            fontSize: 12,
+            fontWeight: '600'
+        },
+        rotateLabels: 45,
+        //formatXLabel: (label) => formatXAxisLabel(label, selectedPeriod),
+        renderDotContent: ({ x, y, index, dataset }) => (
+            <TouchableOpacity
+                key={`dot-${index}`}
+                onPress={() => {
+                    const dataPoint = dataset.data[index];
+                    const date = netCashFlowData.labels[index];
+                    setTooltipData({
+                        value: dataPoint,
+                        date,
+                        visible: true,
+                        position: { x, y }
+                    });
+                }}
+                style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: 'white',
+                    borderWidth: 2,
+                    borderColor: dataset.color(1),
+                    position: 'absolute',
+                    left: x - 10,
+                    top: y - 10,
+                }}
+            />
+        )
+    }), [selectedPeriod, netCashFlowData.labels]);
+
+    // ----------------
+    // Event Handlers and Calculations
+    // ----------------
+    const handleProjectionApply = ({ forecastPeriod: newPeriod, growthRate: newRate }) => {
+        setForecastPeriod(newPeriod);
+        setGrowthRate(newRate);
+        setShowProjections(true);
+
+        return calculateProjections(cashFlowData, newPeriod, newRate);
+    };
+
+    const calculateTotals = useCallback(() => {
         let dataToUse = cashFlowData;
         if (showProjections) {
             const projections = calculateProjections(cashFlowData, forecastPeriod, growthRate);
@@ -203,13 +656,12 @@ const CashFlow = () => {
             acc.totalOutflows += (curr.outflows || 0);
             return acc;
         }, { totalInflows: 0, totalOutflows: 0 });
-    };
+    }, [cashFlowData, showProjections, forecastPeriod, growthRate]);
 
     const { totalInflows, totalOutflows } = calculateTotals();
     const netCashFlow = totalInflows - totalOutflows;
 
-    // Enhanced tooltip animations
-    const showTooltip = (type) => {
+    const showTooltip = useCallback((type) => {
         setSelectedTooltip(type);
         Animated.sequence([
             Animated.timing(tooltipFadeAnim, {
@@ -223,7 +675,7 @@ const CashFlow = () => {
                 useNativeDriver: true
             })
         ]).start();
-    };
+    }, [tooltipFadeAnim]);
 
     const hideTooltip = () => {
         Animated.timing(tooltipFadeAnim, {
@@ -233,118 +685,16 @@ const CashFlow = () => {
         }).start(() => setSelectedTooltip(null));
     };
 
-    // Calculate projections based on current data and user inputs
-    const calculateProjections = (baseData, months, growth) => {
-        const growthRate = parseFloat(growth) / 100;
-        const lastEntry = baseData[baseData.length - 1];
-        const projections = [];
+    const [tooltipData, setTooltipData] = useState({
+        value: 0,
+        date: '',
+        visible: false,
+        position: { x: 0, y: 0 }
+    });
 
-        for (let i = 1; i <= parseInt(months); i++) {
-            const projectedInflows = lastEntry.inflows * Math.pow(1 + growthRate, i);
-            const projectedOutflows = lastEntry.outflows * Math.pow(1 + (growthRate * 0.8), i); // Assuming costs grow slightly slower
-            projections.push({
-                id: `proj_${i}`,
-                date: `Projection ${i}`,
-                inflows: projectedInflows,
-                outflows: projectedOutflows,
-                category: 'Projected'
-            });
-        }
-
-        return projections;
-    };
-
-    // Chart Type Selector Component
-    const ChartTypeSelector = () => (
-        <View style={styles.chartTypeSelector}>
-            <TouchableOpacity
-                style={[
-                    styles.chartTypeButton,
-                    selectedChart === 'line' && styles.chartTypeButtonActive
-                ]}
-                onPress={() => setSelectedChart('line')}
-            >
-                <Text
-                    style={[
-                        styles.chartTypeText,
-                        selectedChart === 'line' && styles.chartTypeTextActive
-                    ]}
-                >
-                    Line
-                </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-                style={[
-                    styles.chartTypeButton,
-                    selectedChart === 'bar' && styles.chartTypeButtonActive
-                ]}
-                onPress={() => setSelectedChart('bar')}
-            >
-                <Text
-                    style={[
-                        styles.chartTypeText,
-                        selectedChart === 'bar' && styles.chartTypeTextActive
-                    ]}
-                >
-                    Bar
-                </Text>
-            </TouchableOpacity>
-        </View>
-    );
-
-    // Projection Modal Component
-    const ProjectionModal = () => (
-        <Modal
-            animationType="slide"
-            transparent={true}
-            visible={projectionModalVisible}
-            onRequestClose={() => setProjectionModalVisible(false)}
-        >
-            <View style={styles.modalOverlay}>
-                <View style={styles.projectionModalContainer}>
-                    <View style={styles.modalHeader}>
-                        <Text style={styles.projectionModalTitle}>
-                            {showProjections ? 'Update Cash Flow Forecast' : 'Generate Cash Flow Forecast'}
-                        </Text>
-                        <TouchableOpacity
-                            onPress={() => setProjectionModalVisible(false)}
-                        >
-                            <X color={COLORS.text} size={24} />
-                        </TouchableOpacity>
-                    </View>
-                    <View>
-                        <Text style={styles.inputLabel}>Forecast Period (months):</Text>
-                        <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={forecastPeriod}
-                            onChangeText={setForecastPeriod}
-                        />
-                        <Text style={styles.inputLabel}>Projected Growth Rate (%):</Text>
-                        <TextInput
-                            style={styles.input}
-                            keyboardType="numeric"
-                            value={growthRate}
-                            onChangeText={setGrowthRate}
-                        />
-                        <TouchableOpacity
-                            style={styles.projectionModalButton}
-                            onPress={() => {
-                                setShowProjections(true);
-                                setProjectionModalVisible(false);
-                            }}
-                        >
-                            <Text style={styles.projectionModalButtonText}>
-                                {showProjections ? 'Update Forecast' : 'Generate Forecast'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-        </Modal>
-    );
-
-    // Tooltip Modal Component
+    // ----------------
+    // Render Methods
+    // ----------------
     const TooltipModal = () => (
         <Modal
             animationType="fade"
@@ -352,10 +702,10 @@ const CashFlow = () => {
             visible={selectedTooltip !== null}
             onRequestClose={hideTooltip}
         >
-            <View style={styles.tooltipOverlay}>
+            <View style={CashFlowStyles.tooltipOverlay}>
                 <Animated.View
                     style={[
-                        styles.tooltipContainer,
+                        CashFlowStyles.tooltipContainer,
                         {
                             opacity: tooltipFadeAnim
                         }
@@ -363,26 +713,26 @@ const CashFlow = () => {
                 >
                     {selectedTooltip && (
                         <>
-                            <Text style={styles.tooltipTitle}>
+                            <Text style={CashFlowStyles.tooltipTitle}>
                                 {tooltipContent[selectedTooltip].title}
                             </Text>
-                            <Text style={styles.tooltipDescription}>
+                            <Text style={CashFlowStyles.tooltipDescription}>
                                 {tooltipContent[selectedTooltip].description}
                             </Text>
-                            <View style={styles.tooltipTipsContainer}>
-                                <Text style={styles.tooltipTipsTitle}>Tips:</Text>
+                            <View style={CashFlowStyles.tooltipTipsContainer}>
+                                <Text style={CashFlowStyles.tooltipTipsTitle}>Tips:</Text>
                                 {tooltipContent[selectedTooltip].tips.map((tip, index) => (
-                                    <View key={index} style={styles.tooltipTipItem}>
+                                    <View key={index} style={CashFlowStyles.tooltipTipItem}>
                                         <HelpCircle color={COLORS.primary} size={16} />
-                                        <Text style={styles.tooltipTipText}>{tip}</Text>
+                                        <Text style={CashFlowStyles.tooltipTipText}>{tip}</Text>
                                     </View>
                                 ))}
                             </View>
                             <TouchableOpacity
-                                style={styles.tooltipCloseButton}
+                                style={CashFlowStyles.tooltipCloseButton}
                                 onPress={hideTooltip}
                             >
-                                <Text style={styles.tooltipCloseText}>Close</Text>
+                                <Text style={CashFlowStyles.tooltipCloseText}>Close</Text>
                             </TouchableOpacity>
                         </>
                     )}
@@ -391,511 +741,299 @@ const CashFlow = () => {
         </Modal>
     );
 
-    // Period Selector Component
-    const PeriodSelector = () => (
-        <View style={styles.periodSelector}>
-            {['week', 'month', 'year'].map((period) => (
-                <TouchableOpacity
-                    key={period}
-                    style={[
-                        styles.periodButton,
-                        selectedPeriod === period && styles.periodButtonActive
-                    ]}
-                    onPress={() => setSelectedPeriod(period)}
-                >
-                    <Text
-                        style={[
-                            styles.periodButtonText,
-                            selectedPeriod === period && styles.periodButtonTextActive
-                        ]}
-                    >
-                        {period.charAt(0).toUpperCase() + period.slice(1)}
-                    </Text>
-                </TouchableOpacity>
-            ))}
-        </View>
-    );
-
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={CashFlowStyles.safeArea}>
             <>
                 <StatusBar
                     barStyle="dark-content"
                     backgroundColor={'#fff'}
-                    translucent={true}
+                    translucent={Platform.OS === 'android'}
                 />
                 <ScreenLayout headerProps={{ title: "Cash Flow Analysis" }}>
-                    <View style={styles.container}>
-                        <ScrollView style={styles.content}>
-                            {/* Period Selector */}
-                            <PeriodSelector />
-
-                            {/* Summary Section */}
-                            <View style={styles.summaryContainer}>
-                                <View style={styles.summaryHeader}>
-                                    <Text style={styles.summaryTitle}>Net Cash Flow</Text>
-                                    <TouchableOpacity
-                                        onPress={() => showTooltip('netCashFlow')}
-                                        style={styles.helpButton}
-                                    >
-                                        <HelpCircle color={COLORS.primary} size={20} />
-                                    </TouchableOpacity>
-                                </View>
-                                <Text style={[
-                                    styles.summaryAmount,
-                                    { color: netCashFlow >= 0 ? COLORS.success : COLORS.danger }
-                                ]}>
-                                    Ksh {netCashFlow.toLocaleString()}
-                                </Text>
-                                {netCashFlow >= 0 ? (
-                                    <View style={styles.statusIndicator}>
-                                        <TrendingUp color={COLORS.success} size={16} />
-                                        <Text style={[styles.statusText, { color: COLORS.success }]}>
-                                            Healthy Cash Position
-                                        </Text>
-                                    </View>
-                                ) : (
-                                    <View style={styles.statusIndicator}>
-                                        <TrendingDown color={COLORS.danger} size={16} />
-                                        <Text style={[styles.statusText, { color: COLORS.danger }]}>
-                                            Action Required: Review Expenses
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* Components Container */}
-                            <View style={styles.componentsContainer}>
-                                <TouchableOpacity
-                                    style={[styles.componentItem, { backgroundColor: COLORS.success + '20' }]}
-                                    onPress={() => showTooltip('inflows')}
-                                >
-                                    <View style={styles.componentHeader}>
-                                        <ArrowUpRight color={COLORS.success} size={20} />
-                                        <Text style={styles.componentLabel}>Total Inflows</Text>
-                                    </View>
-                                    <Text style={[styles.componentValue, { color: COLORS.success }]}>
-                                        Ksh {totalInflows.toLocaleString()}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.componentItem, { backgroundColor: COLORS.danger + '20' }]}
-                                    onPress={() => showTooltip('outflows')}
-                                >
-                                    <View style={styles.componentHeader}>
-                                        <ArrowDownRight color={COLORS.danger} size={20} />
-                                        <Text style={styles.componentLabel}>Total Outflows</Text>
-                                    </View>
-                                    <Text style={[styles.componentValue, { color: COLORS.danger }]}>
-                                        Ksh {totalOutflows.toLocaleString()}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* Charts Section */}
-                            <View style={styles.chartTypeSelector}>
-                                {/* ... chart type selector ... */}
-                                <ChartTypeSelector />
-                            </View>
-                            <View style={styles.graphContainer}>
-                                <View style={styles.graphTitleContainer}>
-                                    <Text style={styles.graphTitle}>Net Cash Flow Trend</Text>
-                                    <TouchableOpacity
-                                        onPress={() => showTooltip('cashFlowTrend')}
-                                        style={styles.helpButton}
-                                    >
-                                        <HelpCircle color={COLORS.primary} size={20} />
-                                    </TouchableOpacity>
-                                </View>
-                                {selectedChart === 'line' ? (
-                                    <LineChart
-                                        data={netCashFlowData}
-                                        width={screenWidth - 40}
-                                        height={220}
-                                        chartConfig={chartConfig}
-                                        bezier
-                                        style={styles.chart}
-                                        onDataPointClick={({ value }) => {
-                                            Alert.alert("Cash Flow", `Net Cash Flow: Ksh ${value.toLocaleString()}`);
-                                        }}
-                                    />
-                                ) : (
-                                    <BarChart
-                                        data={netCashFlowData}
-                                        width={screenWidth - 40}
-                                        height={220}
-                                        chartConfig={chartConfig}
-                                        style={styles.chart}
-                                    />
-                                )}
-                            </View>
-                            <View style={styles.graphContainer}>
-                                <View style={styles.graphTitleContainer}>
-                                    <Text style={styles.graphTitle}>Cash Inflows and Outflows</Text>
-                                    <TouchableOpacity
-                                        onPress={() => showTooltip('inflowOutflow')}
-                                        style={styles.helpButton}
-                                    >
-                                        <HelpCircle color={COLORS.primary} size={20} />
-                                    </TouchableOpacity>
-                                </View>
-                                <BarChart
-                                    data={inflowOutflowData}
-                                    width={screenWidth - 40}
-                                    height={220}
-                                    chartConfig={chartConfig}
-                                    style={styles.chart}
-                                    showValuesOnTopOfBars
-                                />
-                            </View>
-
-                            {/* Forecast Button */}
-                            <TouchableOpacity
-                                style={styles.forecastButton}
-                                onPress={() => setProjectionModalVisible(true)}
+                    {isLoading ? (
+                        <View style={CashFlowStyles.loadingContainer}>
+                            <ActivityIndicator size="large" color={COLORS.primary} />
+                        </View>
+                    ) : error ? (
+                        <View style={CashFlowStyles.errorContainer}>
+                            <Text style={CashFlowStyles.errorText}>{error}</Text>
+                        </View>
+                    ) : (
+                        <View style={CashFlowStyles.container}>
+                            <ScrollView
+                                style={CashFlowStyles.content}
+                                contentContainerStyle={[{ paddingBottom: 100 }]}
                             >
-                                <View style={styles.forecastButtonContent}>
-                                    <PieChart color={COLORS.background} size={24} />
-                                    <Text style={styles.forecastButtonText}>
-                                        {showProjections ? 'Update Forecast' : 'Generate Cash Flow Forecast'}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
+                                {/* Period Selector */}
+                                <PeriodSelector
+                                    selectedPeriod={selectedPeriod}
+                                    setSelectedPeriod={setSelectedPeriod}
+                                />
 
-                            {/* Insights Section */}
-                            {showProjections && (
-                                <View style={styles.insightsContainer}>
-                                    <Text style={styles.insightsTitle}>Forecast Insights</Text>
-                                    <View style={styles.insightItem}>
-                                        <Text style={styles.insightLabel}>Projected Growth Rate:</Text>
-                                        <Text style={styles.insightValue}>{growthRate}%</Text>
+                                {/* Summary Section */}
+                                <View style={CashFlowStyles.summaryContainer}>
+                                    <View style={CashFlowStyles.summaryHeader}>
+                                        <Text style={CashFlowStyles.summaryTitle}>Net Cash Flow</Text>
+                                        <TouchableOpacity
+                                            style={CashFlowStyles.helpButton}
+                                            onPress={() => showTooltip('netCashFlow')}
+                                            accessibilityLabel="Net cash flow information"
+                                            accessibilityRole="button"
+                                        >
+                                            <HelpCircle color={COLORS.primary} size={20} />
+                                        </TouchableOpacity>
                                     </View>
-                                    <View style={styles.insightItem}>
-                                        <Text style={styles.insightLabel}>Forecast Period:</Text>
-                                        <Text style={styles.insightValue}>{forecastPeriod} months</Text>
-                                    </View>
+                                    <Text style={[
+                                        CashFlowStyles.summaryAmount,
+                                        { color: (netCashFlow || 0) >= 0 ? COLORS.success : COLORS.danger }
+                                    ]}>
+                                        Ksh {(netCashFlow || 0).toLocaleString()}
+                                    </Text>
+                                    {netCashFlow >= 0 ? (
+                                        <View style={CashFlowStyles.statusIndicator}>
+                                            <TrendingUp color={COLORS.success} size={16} />
+                                            <Text style={[CashFlowStyles.statusText, { color: COLORS.success }]}>
+                                                Healthy Cash Position
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <View style={CashFlowStyles.statusIndicator}>
+                                            <TrendingDown color={COLORS.danger} size={16} />
+                                            <Text style={[CashFlowStyles.statusText, { color: COLORS.danger }]}>
+                                                Action Required: Review Expenses
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
-                            )}
-                        </ScrollView>
-                    </View>
+
+                                {/* Components Container */}
+                                <View style={CashFlowStyles.componentsContainer}>
+                                    <TouchableOpacity
+                                        style={[CashFlowStyles.componentItem, { backgroundColor: COLORS.success + '20' }]}
+                                        onPress={() => showTooltip('inflows')}
+                                    >
+                                        <View style={CashFlowStyles.componentHeader}>
+                                            <ArrowUpRight color={COLORS.success} size={20} />
+                                            <Text style={CashFlowStyles.componentLabel}>Total Inflows</Text>
+                                        </View>
+                                        <Text style={[CashFlowStyles.componentValue, { color: COLORS.success }]}>
+                                            Ksh {totalInflows.toLocaleString()}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[CashFlowStyles.componentItem, { backgroundColor: COLORS.danger + '20' }]}
+                                        onPress={() => showTooltip('outflows')}
+                                    >
+                                        <View style={CashFlowStyles.componentHeader}>
+                                            <ArrowDownRight color={COLORS.danger} size={20} />
+                                            <Text style={CashFlowStyles.componentLabel}>Total Outflows</Text>
+                                        </View>
+                                        <Text style={[CashFlowStyles.componentValue, { color: COLORS.danger }]}>
+                                            Ksh {totalOutflows.toLocaleString()}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Charts Section */}
+                                <View style={CashFlowStyles.chartTypeSelector}>
+                                    <ChartTypeSelector
+                                        selectedChart={selectedChart}
+                                        setSelectedChart={setSelectedChart}
+                                    />
+                                </View>
+                                {/* Net Cash Flow Chart */}
+                                <View style={CashFlowStyles.graphContainer}>
+                                    <View style={CashFlowStyles.graphTitleContainer}>
+                                        <Text style={CashFlowStyles.graphTitle}>Net Cash Flow Trend</Text>
+                                        <TouchableOpacity
+                                            onPress={() => showTooltip('cashFlowTrend')}
+                                            style={CashFlowStyles.helpButton}
+                                        >
+                                            <HelpCircle color={COLORS.primary} size={20} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <ScrollableChart
+                                        height={280}
+                                        yAxis={
+                                            <View style={{ height: '100%', justifyContent: 'space-between', paddingRight: 10 }}>
+                                                {yAxisLabels.reverse().map((label, index) => (
+                                                    <Text key={index} style={{ fontSize: 10, color: COLORS.textSecondary }}>
+                                                        {label}
+                                                    </Text>
+                                                ))}
+                                            </View>
+                                        }
+                                        legend={
+                                            <ChartLegend
+                                                datasets={['Net Cash Flow']}
+                                                colors={[COLORS.success]}
+                                            />
+                                        }
+                                    >
+                                        {selectedChart === 'line' ? (
+                                            <>
+                                                <LineChart
+                                                    data={netCashFlowData}
+                                                    width={Math.max(screenWidth * 1.2, 400)}
+                                                    height={220}
+                                                    chartConfig={chartConfig}
+                                                    bezier
+                                                    style={CashFlowStyles.chart}
+                                                    withVerticalLabels={true}
+                                                    withHorizontalLabels={false}
+                                                    withInnerLines={true}
+                                                    withOuterLines={true}
+                                                    withDots={true}
+                                                    withShadow={false}
+                                                    segments={5}
+                                                    decorator={chartConfig.decorator}
+                                                    formatXLabel={chartConfig.formatXLabel}
+                                                    rotateLabels={chartConfig.rotateLabels}
+                                                />
+                                                <DataPointTooltip {...tooltipData} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <BarChart
+                                                    data={netCashFlowData}
+                                                    width={Math.max(screenWidth * 1.2, 400)}
+                                                    height={220}
+                                                    chartConfig={chartConfig}
+                                                    style={CashFlowStyles.chart}
+                                                    withVerticalLabels={true}
+                                                    withHorizontalLabels={false}
+                                                    segments={5}
+                                                    decorator={chartConfig.decorator}
+                                                    formatXLabel={chartConfig.formatXLabel}
+                                                    rotateLabels={chartConfig.rotateLabels}
+                                                />
+                                                <DataPointTooltip {...tooltipData} />
+                                            </>
+                                        )}
+                                    </ScrollableChart>
+                                </View>
+
+                                {/* Inflows/Outflows Chart */}
+                                <View style={CashFlowStyles.graphContainer}>
+                                    <View style={CashFlowStyles.graphTitleContainer}>
+                                        <Text style={CashFlowStyles.graphTitle}>Cash Inflows and Outflows</Text>
+                                        <TouchableOpacity
+                                            onPress={() => showTooltip('inflowOutflow')}
+                                            style={CashFlowStyles.helpButton}
+                                        >
+                                            <HelpCircle color={COLORS.primary} size={20} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <ScrollableChart height={280} yAxis={
+                                        <View style={{ height: '100%', justifyContent: 'space-between', paddingRight: 10 }}>
+                                            {yAxisLabels.reverse().map((label, index) => (
+                                                <Text key={index} style={{ fontSize: 10, color: COLORS.textSecondary }}>
+                                                    {label}
+                                                </Text>
+                                            ))}
+                                        </View>
+                                    }
+                                        legend={
+                                            <ChartLegend
+                                                datasets={['Inflows', 'Outflows']}
+                                                colors={[COLORS.success, COLORS.danger]}
+                                            />
+                                        }
+                                    >
+                                        {selectedChart === 'line' ? (
+                                            <>
+                                                <LineChart
+                                                    data={inflowOutflowData}
+                                                    width={Math.max(screenWidth * 1.2, 400)}
+                                                    height={220}
+                                                    chartConfig={chartConfig}
+                                                    bezier
+                                                    style={CashFlowStyles.chart}
+                                                    withVerticalLabels={true}
+                                                    withHorizontalLabels={false}
+                                                    withInnerLines={true}
+                                                    withOuterLines={true}
+                                                    withDots={true}
+                                                    withShadow={false}
+                                                    segments={5}
+                                                    decorator={chartConfig.decorator}
+                                                    formatXLabel={chartConfig.formatXLabel}
+                                                    rotateLabels={chartConfig.rotateLabels}
+                                                />
+                                                <DataPointTooltip {...tooltipData} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <BarChart
+                                                    data={netCashFlowData}
+                                                    width={Math.max(screenWidth * 1.2, 400)}
+                                                    height={220}
+                                                    chartConfig={chartConfig}
+                                                    style={CashFlowStyles.chart}
+                                                    withVerticalLabels={true}
+                                                    withHorizontalLabels={false}
+                                                    segments={5}
+                                                    decorator={chartConfig.decorator}
+                                                    formatXLabel={chartConfig.formatXLabel}
+                                                    rotateLabels={chartConfig.rotateLabels}
+                                                />
+                                                <DataPointTooltip {...tooltipData} />
+                                            </>
+                                        )}
+                                    </ScrollableChart>
+                                </View>
+
+                                {/* Forecast Button */}
+                                <TouchableOpacity
+                                    style={CashFlowStyles.forecastButton}
+                                    onPress={() => setProjectionModalVisible(true)}
+                                >
+                                    <View style={CashFlowStyles.forecastButtonContent}>
+                                        <PieChart color={COLORS.background} size={24} />
+                                        <Text style={CashFlowStyles.forecastButtonText}>
+                                            {showProjections ? 'Update Forecast' : 'Generate Cash Flow Forecast'}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                {/* Insights Section */}
+                                {showProjections && (
+                                    <View style={CashFlowStyles.insightsContainer}>
+                                        <View style={CashFlowStyles.graphTitleContainer}>
+                                            <Text style={CashFlowStyles.graphTitle}>Forecast Insights</Text>
+                                            <TouchableOpacity
+                                                onPress={() => showTooltip('forecast')}
+                                                style={CashFlowStyles.helpButton}
+                                            >
+                                                <HelpCircle color={COLORS.primary} size={20} />
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View style={CashFlowStyles.insightItem}>
+                                            <Text style={CashFlowStyles.insightLabel}>Projected Growth Rate:</Text>
+                                            <Text style={CashFlowStyles.insightValue}>{growthRate}%</Text>
+                                        </View>
+                                        <View style={CashFlowStyles.insightItem}>
+                                            <Text style={CashFlowStyles.insightLabel}>Forecast Period:</Text>
+                                            <Text style={CashFlowStyles.insightValue}>{forecastPeriod} months</Text>
+                                        </View>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        </View>
+                    )}
                 </ScreenLayout>
 
                 {/* Modals */}
-                <ProjectionModal />
+                <ProjectionModal
+                    visible={projectionModalVisible}
+                    onClose={() => setProjectionModalVisible(false)}
+                    onApply={handleProjectionApply}
+                />
                 <TooltipModal />
             </>
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    container: {
-        flex: 1,
-    },
-    content: {
-        flex: 1,
-        padding: 20,
-    },
-    periodSelector: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-        backgroundColor: COLORS.lightGray,
-        borderRadius: 10,
-        paddingVertical: 4,
-    },
-    periodButton: {
-        flex: 1,
-        paddingVertical: 8,
-        alignItems: 'center',
-        borderRadius: 8,
-    },
-    periodButtonActive: {
-        backgroundColor: COLORS.background,
-        shadowColor: COLORS.text,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    periodButtonText: {
-        color: COLORS.textSecondary,
-        fontWeight: '500',
-    },
-    periodButtonTextActive: {
-        color: COLORS.text,
-        fontWeight: '600',
-    },
-    summaryContainer: {
-        backgroundColor: COLORS.lightGray,
-        padding: 20,
-        borderRadius: 15,
-        marginBottom: 20,
-    },
-    summaryHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    summaryTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    summaryAmount: {
-        fontSize: 32,
-        fontWeight: '700',
-        marginVertical: 10,
-    },
-    helpButton: {
-        padding: 6,
-    },
-    statusIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 5,
-    },
-    statusText: {
-        marginLeft: 8,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    componentsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-        flexWrap: 'wrap',
-    },
-    componentItem: {
-        width: '48%',
-        padding: 15,
-        borderRadius: 12,
-    },
-    componentHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    componentLabel: {
-        fontSize: 14,
-        marginLeft: 6,
-        color: COLORS.text,
-        fontWeight: '500',
-    },
-    componentValue: {
-        fontSize: 20,
-        fontWeight: '600',
-    },
-    chartTypeSelector: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: 20,
-    },
-    chartTypeButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        marginHorizontal: 5,
-        borderRadius: 20,
-        backgroundColor: COLORS.lightGray,
-    },
-    chartTypeButtonActive: {
-        backgroundColor: COLORS.primary,
-    },
-    chartTypeText: {
-        color: COLORS.textSecondary,
-        fontWeight: '500',
-    },
-    chartTypeTextActive: {
-        color: COLORS.background,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    projectionModalContainer: {
-        backgroundColor: COLORS.background,
-        padding: 20,
-        borderRadius: 15,
-        width: '90%',
-        maxWidth: 400,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    projectionModalTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    inputLabel: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginBottom: 8,
-    },
-    input: {
-        backgroundColor: COLORS.lightGray,
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-        fontSize: 16,
-    },
-    projectionModalButton: {
-        backgroundColor: COLORS.primary,
-        padding: 14,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    projectionModalButtonText: {
-        color: COLORS.background,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    tooltipOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    tooltipContainer: {
-        backgroundColor: COLORS.background,
-        padding: 20,
-        borderRadius: 15,
-        width: '90%',
-        maxWidth: 400,
-        shadowColor: COLORS.text,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-        elevation: 5,
-    },
-    tooltipTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.text,
-        marginBottom: 10,
-    },
-    tooltipDescription: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-        marginBottom: 15,
-        lineHeight: 20,
-    },
-    tooltipTipsContainer: {
-        backgroundColor: COLORS.lightGray,
-        padding: 15,
-        borderRadius: 10,
-        marginBottom: 15,
-    },
-    tooltipTipsTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.text,
-        marginBottom: 10,
-    },
-    tooltipTipItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    tooltipTipText: {
-        marginLeft: 8,
-        fontSize: 14,
-        color: COLORS.text,
-        flex: 1,
-    },
-    tooltipCloseButton: {
-        backgroundColor: COLORS.primary,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    tooltipCloseText: {
-        color: COLORS.background,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    graphContainer: {
-        marginBottom: 25,
-        backgroundColor: COLORS.background,
-        borderRadius: 15,
-        padding: 15,
-        shadowColor: COLORS.text,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    graphTitleContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    graphTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    chart: {
-        marginVertical: 8,
-        borderRadius: 16,
-    },
-    forecastButton: {
-        backgroundColor: COLORS.primary,
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 20,
-    },
-    forecastButtonContent: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    forecastButtonText: {
-        color: COLORS.background,
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-    insightsContainer: {
-        backgroundColor: COLORS.lightGray,
-        padding: 20,
-        borderRadius: 15,
-        marginBottom: 20,
-    },
-    insightsTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.text,
-        marginBottom: 15,
-    },
-    insightItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    insightLabel: {
-        fontSize: 14,
-        color: COLORS.textSecondary,
-    },
-    insightValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: COLORS.text,
-    }
-});
 
 export default CashFlow;
