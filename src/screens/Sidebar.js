@@ -27,6 +27,7 @@ const Sidebar = () => {
 
     const menuItems = [
         { name: 'Dashboard', icon: 'home' },
+        { name: 'Action Center', icon: 'flash' },
         { name: 'Transaction Log', icon: 'list' },
         { name: 'Cash Flow', icon: 'trending-up' },
         { name: 'Budget Tracker', icon: 'wallet' },

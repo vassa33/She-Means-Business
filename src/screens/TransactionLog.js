@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     TextInput,
     Modal,
@@ -10,24 +9,19 @@ import {
     SafeAreaView,
     StatusBar,
     Switch,
-    Alert,
-    Platform
+    Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useAppContext } from '../context/AppContext';
 import ScreenLayout from '../layouts/ScreenLayout';
-
-const CHART_COLORS = [
-    '#FF69B4', '#DDA0DD', '#DA70D6', '#FF8C00', '#20B2AA',
-    '#9370DB', '#FF1493', '#FFB6C1', '#DB7093', '#F08080'
-];
+import transactionLogStyles from '../styles/TransactionLogStyles';
 
 const SearchBar = ({ searchQuery, setSearchQuery }) => (
-    <View style={styles.searchContainer}>
-        <Ionicons name="search" size={24} color="#7F7F7F" style={styles.searchIcon} />
+    <View style={transactionLogStyles.searchContainer}>
+        <Ionicons name="search" size={24} color="#7F7F7F" style={transactionLogStyles.searchIcon} />
         <TextInput
-            style={styles.searchInput}
+            style={transactionLogStyles.searchInput}
             placeholder="Search transactions..."
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -36,33 +30,33 @@ const SearchBar = ({ searchQuery, setSearchQuery }) => (
 );
 
 const TransactionItem = ({ transaction, onEdit, onDelete }) => (
-    <View style={styles.transactionItem}>
+    <View style={transactionLogStyles.transactionItem}>
         <View style={[
-            styles.transactionBorder,
+            transactionLogStyles.transactionBorder,
             { borderLeftColor: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
         ]} />
-        <View style={styles.transactionInfo}>
-            <Text style={styles.transactionDate}>{transaction.date}</Text>
-            <Text style={styles.transactionDescription}>{transaction.description}</Text>
-            <Text style={styles.transactionCategory}>{transaction.category}</Text>
+        <View style={transactionLogStyles.transactionInfo}>
+            <Text style={transactionLogStyles.transactionDate}>{transaction.date}</Text>
+            <Text style={transactionLogStyles.transactionDescription}>{transaction.description}</Text>
+            <Text style={transactionLogStyles.transactionCategory}>{transaction.category}</Text>
         </View>
-        <View style={styles.rightContainer}>
+        <View style={transactionLogStyles.rightContainer}>
             <Text style={[
-                styles.transactionAmountText,
+                transactionLogStyles.transactionAmountText,
                 { color: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
             ]}>
                 {transaction.type === 'income' ? '+' : '-'} Ksh {Math.abs(transaction.amount).toLocaleString()}
             </Text>
-            <View style={styles.actionButtons}>
+            <View style={transactionLogStyles.actionButtons}>
                 <TouchableOpacity
-                    style={styles.actionButton}
+                    style={transactionLogStyles.actionButton}
                     onPress={() => onEdit(transaction)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                     <Ionicons name="pencil" size={20} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={styles.actionButton}
+                    style={transactionLogStyles.actionButton}
                     onPress={() => onDelete(transaction)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -88,50 +82,50 @@ const TransactionModal = ({
         visible={visible}
         onRequestClose={onClose}
     >
-        <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
-                <Text style={styles.modalTitle}>
+        <View style={transactionLogStyles.modalOverlay}>
+            <View style={transactionLogStyles.modalView}>
+                <Text style={transactionLogStyles.modalTitle}>
                     {isEditing ? 'Edit Transaction' : 'Add New Transaction'}
                 </Text>
                 <TextInput
-                    style={styles.input}
+                    style={transactionLogStyles.input}
                     placeholder="Date (YYYY-MM-DD)"
                     value={transaction.date}
                     onChangeText={(text) => setTransaction({ ...transaction, date: text })}
                 />
                 <TextInput
-                    style={styles.input}
+                    style={transactionLogStyles.input}
                     placeholder="Description"
                     value={transaction.description}
                     onChangeText={(text) => setTransaction({ ...transaction, description: text })}
                 />
                 <TextInput
-                    style={styles.input}
+                    style={transactionLogStyles.input}
                     placeholder="Amount"
                     keyboardType="numeric"
                     value={transaction.amount}
                     onChangeText={(text) => setTransaction({ ...transaction, amount: text })}
                 />
-                <View style={styles.typeSelection}>
+                <View style={transactionLogStyles.typeSelection}>
                     <TouchableOpacity
                         style={[
-                            styles.typeButton,
-                            transaction.type === 'expense' && styles.selectedType
+                            transactionLogStyles.typeButton,
+                            transaction.type === 'expense' && transactionLogStyles.selectedType
                         ]}
                         onPress={() => setTransaction({ ...transaction, type: 'expense', category: '' })}
                     >
-                        <Text style={transaction.type === 'expense' ? styles.selectedTypeText : null}>
+                        <Text style={transaction.type === 'expense' ? transactionLogStyles.selectedTypeText : null}>
                             Expense
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[
-                            styles.typeButton,
-                            transaction.type === 'income' && styles.selectedType
+                            transactionLogStyles.typeButton,
+                            transaction.type === 'income' && transactionLogStyles.selectedType
                         ]}
                         onPress={() => setTransaction({ ...transaction, type: 'income', category: '' })}
                     >
-                        <Text style={transaction.type === 'income' ? styles.selectedTypeText : null}>
+                        <Text style={transaction.type === 'income' ? transactionLogStyles.selectedTypeText : null}>
                             Income
                         </Text>
                     </TouchableOpacity>
@@ -139,7 +133,7 @@ const TransactionModal = ({
                 {transaction.type === 'expense' ? (
                     <Picker
                         selectedValue={transaction.category}
-                        style={styles.input}
+                        style={transactionLogStyles.input}
                         onValueChange={(itemValue) => setTransaction({ ...transaction, category: itemValue })}
                     >
                         <Picker.Item label="Select a category" value="" />
@@ -149,18 +143,18 @@ const TransactionModal = ({
                     </Picker>
                 ) : (
                     <TextInput
-                        style={styles.input}
+                        style={transactionLogStyles.input}
                         placeholder="Income Category"
                         value={transaction.category}
                         onChangeText={(text) => setTransaction({ ...transaction, category: text })}
                     />
                 )}
-                <View style={styles.buttonContainer}>
-                    <TouchableOpacity style={styles.addButton} onPress={onSubmit}>
-                        <Text style={styles.addButtonText}>{isEditing ? 'Update' : 'Add'}</Text>
+                <View style={transactionLogStyles.buttonContainer}>
+                    <TouchableOpacity style={transactionLogStyles.addButton} onPress={onSubmit}>
+                        <Text style={transactionLogStyles.addButtonText}>{isEditing ? 'Update' : 'Add'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <TouchableOpacity style={transactionLogStyles.cancelButton} onPress={onClose}>
+                        <Text style={transactionLogStyles.cancelButtonText}>Cancel</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -305,22 +299,22 @@ Regular transaction logging helps you make data-driven decisions for business gr
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={transactionLogStyles.safeArea}>
             <StatusBar
                 barStyle="dark-content"
                 backgroundColor="transparent"
                 translucent={true}
             />
             <ScreenLayout headerProps={screenHeaderProps}>
-                <View style={styles.contentContainer}>
+                <View style={transactionLogStyles.contentContainer}>
                     <SearchBar
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
                     />
 
-                    <View style={styles.toggleContainer}>
-                        <View style={styles.toggleItem}>
-                            <Text style={styles.toggleLabel}>Income</Text>
+                    <View style={transactionLogStyles.toggleContainer}>
+                        <View style={transactionLogStyles.toggleItem}>
+                            <Text style={transactionLogStyles.toggleLabel}>Income</Text>
                             <Switch
                                 value={showIncomeToggle}
                                 onValueChange={setShowIncomeToggle}
@@ -328,9 +322,9 @@ Regular transaction logging helps you make data-driven decisions for business gr
                                 thumbColor={showIncomeToggle ? '#007AFF' : '#f4f3f4'}
                             />
                         </View>
-                        <View style={styles.toggleSeparator} />
-                        <View style={styles.toggleItem}>
-                            <Text style={styles.toggleLabel}>Expense</Text>
+                        <View style={transactionLogStyles.toggleSeparator} />
+                        <View style={transactionLogStyles.toggleItem}>
+                            <Text style={transactionLogStyles.toggleLabel}>Expense</Text>
                             <Switch
                                 value={showExpenseToggle}
                                 onValueChange={setShowExpenseToggle}
@@ -340,7 +334,7 @@ Regular transaction logging helps you make data-driven decisions for business gr
                         </View>
                     </View>
 
-                    <View style={styles.listContainer}>
+                    <View style={transactionLogStyles.listContainer}>
                         <FlatList
                             data={filteredTransactions}
                             renderItem={({ item }) => (
@@ -351,14 +345,14 @@ Regular transaction logging helps you make data-driven decisions for business gr
                                 />
                             )}
                             keyExtractor={item => item.id}
-                            style={styles.list}
-                            contentContainerStyle={styles.listContent}
+                            style={transactionLogStyles.list}
+                            contentContainerStyle={transactionLogStyles.listContent}
                         />
                     </View>
 
-                    <View style={styles.bottomContainer}>
+                    <View style={transactionLogStyles.bottomContainer}>
                         <TouchableOpacity
-                            style={styles.addTransactionButton}
+                            style={transactionLogStyles.addTransactionButton}
                             onPress={() => {
                                 setEditingTransaction(null);
                                 setNewTransaction({
@@ -372,7 +366,7 @@ Regular transaction logging helps you make data-driven decisions for business gr
                             }}
                         >
                             <Ionicons name="add" size={24} color="#FFFFFF" />
-                            <Text style={styles.addButtonText}>Add Transaction</Text>
+                            <Text style={transactionLogStyles.addButtonText}>Add Transaction</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -400,278 +394,5 @@ Regular transaction logging helps you make data-driven decisions for business gr
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    contentContainer: {
-        flex: 1,
-        backgroundColor: '#fff',
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-    },
-    listContainer: {
-        flex: 1,
-        marginBottom: 80, // Space for fixed button
-    },
-
-    list: {
-        flex: 1,
-    },
-
-    listContent: {
-        paddingBottom: 16,
-    },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F4F3F4',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        marginBottom: 16,
-    },
-    searchInput: {
-        // fontSize: 16,
-        color: '#000000',
-        marginLeft: 20,
-    },
-    searchIcon: {
-        marginLeft: 6,
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 8,
-        marginBottom: 16,
-        backgroundColor: '#F4F3F4',
-        borderRadius: 8,
-    },
-    toggleItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-    },
-    toggleSeparator: {
-        width: 1,
-        height: '80%',
-        backgroundColor: '#E0E0E0',
-        marginHorizontal: 16,
-    },
-    toggleLabel: {
-        fontSize: 16,
-        color: '#7F7F7F',
-        marginRight: 8,
-    },
-    transactionItem: {
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
-        elevation: 2,
-        flexDirection: 'row',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 3.84,
-    },
-
-    transactionInfo: {
-        flex: 1,
-        marginLeft: 12,
-        marginRight: 16,
-    },
-
-    rightContainer: {
-        alignItems: 'flex-end',
-        minWidth: 120,
-    },
-
-    transactionAmountText: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 8,
-        textAlign: 'right',
-    },
-
-    actionButtons: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        gap: 12,
-    },
-
-    actionButton: {
-        padding: 4,
-    },
-
-    bottomContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#fff',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
-    },
-
-    addTransactionButton: {
-        backgroundColor: '#007AFF',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 8,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-
-    addButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-    addButton: {
-        position: 'absolute',
-        right: 20,
-        bottom: 20,
-        backgroundColor: '#007AFF',
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalView: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-        width: '90%',
-        maxWidth: 400,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 15,
-        color: '#000000',
-    },
-    input: {
-        width: '100%',
-        height: 40,
-        borderColor: '#81B0FF',
-        borderWidth: 1,
-        borderRadius: 8,
-        marginBottom: 12,
-        paddingHorizontal: 12,
-        fontSize: 16,
-        color: '#000000',
-    },
-    typeSelection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginBottom: 12,
-    },
-    typeButton: {
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#81B0FF',
-        borderRadius: 8,
-        width: '48%',
-        alignItems: 'center',
-    },
-    selectedType: {
-        backgroundColor: '#007AFF',
-        borderColor: '#007AFF',
-    },
-    selectedTypeText: {
-        color: '#FFFFFF',
-    },
-    categoryContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        marginBottom: 12,
-    },
-    categoryLabel: {
-        fontSize: 16,
-        fontWeight: '500',
-        marginRight: 10,
-        color: '#000000',
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginTop: 12,
-    },
-    addButton: {
-        backgroundColor: '#007AFF',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        alignItems: 'center',
-        flex: 1,
-        marginRight: 8,
-    },
-    addButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    cancelButton: {
-        backgroundColor: '#F4F3F4',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        alignItems: 'center',
-        flex: 1,
-    },
-    cancelButtonText: {
-        color: '#007AFF',
-        fontSize: 16,
-        fontWeight: '500',
-    }
-});
 
 export default React.memo(TransactionLog);

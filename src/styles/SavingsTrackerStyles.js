@@ -16,7 +16,7 @@ const savingsTrackerStyles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
-        //paddingVertical: 12,
+        //paddingVertical: 1,
         backgroundColor: '#fff',
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',

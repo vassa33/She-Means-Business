@@ -20,6 +20,7 @@ import SavingsTracker from './screens/SavingsTracker';
 import Reports from './screens/Reports';
 import Profile from './screens/Profile';
 import About from './screens/About';
+import ActionCenter from './screens/ActionCenter';
 
 // Create the stack navigator
 const Stack = createStackNavigator();
@@ -109,6 +110,7 @@ function App() {
                         <Stack.Screen name="Login" component={Login} />
                         <Stack.Screen name="CreateAccount" component={CreateAccount} />
                         <Stack.Screen name="Dashboard" component={Dashboard} />
+                        <Stack.Screen name="ActionCenter" component={ActionCenter} />
                         <Stack.Screen name="TransactionLog" component={TransactionLog} />
                         <Stack.Screen name="CashFlow" component={CashFlow} />
                         <Stack.Screen name="BudgetTracker" component={BudgetTracker} />
