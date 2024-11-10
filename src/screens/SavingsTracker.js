@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     FlatList,
     Modal,
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
+import savingsTrackerStyles from '../styles/SavingsTrackerStyles';
 
 const CHART_COLORS = [
     '#4E79A7', // Steel Blue
@@ -32,46 +32,167 @@ const CHART_COLORS = [
 
 
 const SavingsTracker = () => {
-    const [savingsGoals, setSavingsGoals] = useState([
-        { id: '1', name: 'Campaign', target: 30000, saved: 5300 },
-        { id: '2', name: 'Equipment', target: 42000, saved: 21000 },
-        { id: '3', name: 'Expansion', target: 125000, saved: 12000 },
-        { id: '4', name: 'Tech Upgrade', target: 90500, saved: 2000 },
-    ]);
     const [modalVisible, setModalVisible] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [newGoal, setNewGoal] = useState({ name: '', target: '' });
     const [editingGoal, setEditingGoal] = useState(null);
-    const [showChart, setShowChart] = useState(true);
+    const [showChart, setShowChart] = useState(false);
     const [showPercentages, setShowPercentages] = useState(false);
     const [showLogTooltip, setShowLogTooltip] = useState(false);
     const [chartViewIndex, setChartViewIndex] = useState(0); // 0 for saved, 1 for target
     const screenWidth = Dimensions.get('window').width;
 
-    const { totalSavings, totalTarget, chartData } = useMemo(() => {
-        const total = savingsGoals.reduce((sum, goal) => sum + goal.saved, 0);
-        const totalTarget = savingsGoals.reduce((sum, goal) => sum + goal.target, 0);
-        const pieDataBySaved = savingsGoals.map((goal, index) => ({
-            name: goal.name,
-            value: showPercentages ? ((goal.saved / total) * 100) : goal.saved,
-            color: CHART_COLORS[index % CHART_COLORS.length],
-            legendFontColor: '#7F7F7F',
-            legendFontSize: 12
-        }));
-        const pieDataByTarget = savingsGoals.map((goal, index) => ({
-            name: goal.name,
-            value: showPercentages ? ((goal.target / totalTarget) * 100) : goal.target,
-            color: CHART_COLORS[index % CHART_COLORS.length],
-            legendFontColor: '#7F7F7F',
-            legendFontSize: 12
-        }));
+    // Modified data structure to handle monthly savings
+    const getMonthKey = (date) => {
+        return `${date.getFullYear()}-${date.getMonth() + 1}`;
+    };
+
+    // Update the state to handle monthly data
+    const [savingsData, setSavingsData] = useState({
+        monthlyData: {
+            [getMonthKey(new Date())]: {
+                goals: []
+            }
+        }
+    });
+
+    // New state for month navigation
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Function to format the current month and year
+    const formatMonthYear = (date) => {
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    // Functions to handle month navigation
+    const goToPreviousMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() - 1);
+            return newDate;
+        });
+    };
+
+    const goToNextMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() + 1);
+            return newDate;
+        });
+    };
+
+    const currentMonthKey = getMonthKey(currentDate);
+
+    // Initialize monthly savings data if it doesn't exist
+    useEffect(() => {
+        if (!savingsData.monthlyData) {
+            // Initialize first month
+            setSavingsData({
+                ...savingsData,
+                monthlyData: {
+                    [currentMonthKey]: {
+                        goals: []
+                    }
+                }
+            });
+        } else if (!savingsData.monthlyData[currentMonthKey]) {
+            // Get goal names from any existing month
+            const existingMonths = Object.keys(savingsData.monthlyData);
+            const goalTemplates = existingMonths.length > 0
+                ? savingsData.monthlyData[existingMonths[0]].goals.map(goal => ({
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                    name: goal.name,
+                    target: 0, // Start with zero
+                    saved: 0
+                }))
+                : [];
+
+            setSavingsData({
+                ...savingsData,
+                monthlyData: {
+                    ...savingsData.monthlyData,
+                    [currentMonthKey]: {
+                        goals: goalTemplates
+                    }
+                }
+            });
+        }
+    }, [currentMonthKey]);
+
+    // Modified to use monthly goals
+    const currentGoals = useMemo(() => {
+        return savingsData.monthlyData?.[currentMonthKey]?.goals || [];
+    }, [savingsData.monthlyData, currentMonthKey]);
+
+    // Add month navigation UI at the top
+    const MonthNavigation = () => (
+        <View style={savingsTrackerStyles.monthNavigationContainer}>
+            <TouchableOpacity
+                onPress={goToPreviousMonth}
+                style={savingsTrackerStyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+
+            <Text style={savingsTrackerStyles.currentMonthText}>
+                {formatMonthYear(currentDate)}
+            </Text>
+
+            <TouchableOpacity
+                onPress={goToNextMonth}
+                style={savingsTrackerStyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
+            </TouchableOpacity>
+        </View>
+    );
+
+    // Chart data calculations with safety checks and monthly tracking
+    const { totalSavings, totalTarget, chartData, percentageAllocations } = useMemo(() => {
+        const currentGoals = savingsData.monthlyData[currentMonthKey]?.goals || [];
+
+        const total = currentGoals.reduce((sum, goal) => sum + (goal.saved || 0), 0);
+        const targetTotal = currentGoals.reduce((sum, goal) => sum + (goal.target || 0), 0);
+
+        // Only create chart data if we have valid numbers to show
+        const pieData = currentGoals
+            .filter(goal => {
+                // For target view, include goals with target > 0
+                // For saved view, include goals with saved > 0
+                return chartViewIndex === 0 ? goal.saved > 0 : goal.target > 0;
+            })
+            .map((goal, index) => {
+                const value = showPercentages
+                    ? (chartViewIndex === 0
+                        ? (total > 0 ? (goal.saved / total) * 100 : 0)
+                        : (targetTotal > 0 ? (goal.target / targetTotal) * 100 : 0))
+                    : (chartViewIndex === 0 ? goal.saved : goal.target);
+
+                return {
+                    name: goal.name,
+                    saved: goal.saved || 0,
+                    target: goal.target || 0,
+                    color: CHART_COLORS[index % CHART_COLORS.length],
+                    legendFontColor: '#7F7F7F',
+                    legendFontSize: 12,
+                    value: value
+                };
+            });
+
+        const allocations = currentGoals
+            .filter(goal => goal.target > 0)
+            .map(goal => ({
+                name: goal.name,
+                percentage: targetTotal > 0 ? ((goal.target / targetTotal) * 100).toFixed(1) : '0'
+            }));
 
         return {
             totalSavings: total,
-            totalTarget,
-            chartData: chartViewIndex === 0 ? pieDataBySaved : pieDataByTarget
+            totalTarget: targetTotal,
+            chartData: pieData,
+            percentageAllocations: allocations
         };
-    }, [savingsGoals, showPercentages, chartViewIndex]);
+    }, [savingsData.monthlyData, currentMonthKey, showPercentages, chartViewIndex]);
 
     const handleEditGoal = (goal) => {
         setEditingGoal({
@@ -97,19 +218,29 @@ const SavingsTracker = () => {
             return;
         }
 
-        const updatedGoals = savingsGoals.map(goal => {
-            if (goal.id === editingGoal.id) {
-                return {
-                    ...goal,
-                    name: editingGoal.newName.trim(),
-                    target: parseFloat(editingGoal.newTarget),
-                    saved: parseFloat(editingGoal.newSaved)
-                };
-            }
-            return goal;
+        const updatedMonthlyData = { ...savingsData.monthlyData };
+        Object.keys(updatedMonthlyData).forEach(monthKey => {
+            updatedMonthlyData[monthKey].goals = updatedMonthlyData[monthKey].goals.map(goal => {
+                if (goal.id === editingGoal.id) {
+                    return {
+                        ...goal,
+                        name: editingGoal.newName.trim(),
+                        target: parseFloat(editingGoal.newTarget),
+                        // Only update saved amount for current month
+                        saved: monthKey === currentMonthKey
+                            ? parseFloat(editingGoal.newSaved)
+                            : goal.saved
+                    };
+                }
+                return goal;
+            });
         });
 
-        setSavingsGoals(updatedGoals);
+        setSavingsData({
+            ...savingsData,
+            monthlyData: updatedMonthlyData
+        });
+
         setEditModalVisible(false);
         setEditingGoal(null);
 
@@ -122,7 +253,7 @@ const SavingsTracker = () => {
     const handleDeleteGoal = () => {
         Alert.alert(
             "Delete Goal",
-            `Are you sure you want to delete "${editingGoal.name}"?`,
+            `Are you sure you want to delete "${editingGoal.name}"? This will remove this goal from all months.`,
             [
                 {
                     text: "Cancel",
@@ -132,10 +263,21 @@ const SavingsTracker = () => {
                     text: "Delete",
                     style: "destructive",
                     onPress: () => {
-                        const updatedGoals = savingsGoals.filter(
-                            goal => goal.id !== editingGoal.id
-                        );
-                        setSavingsGoals(updatedGoals);
+                        // Remove goal from all months
+                        const updatedMonthlyData = Object.keys(savingsData.monthlyData).reduce((acc, monthKey) => {
+                            acc[monthKey] = {
+                                ...savingsData.monthlyData[monthKey],
+                                goals: savingsData.monthlyData[monthKey].goals
+                                    .filter(goal => goal.id !== editingGoal.id)
+                            };
+                            return acc;
+                        }, {});
+
+                        setSavingsData({
+                            ...savingsData,
+                            monthlyData: updatedMonthlyData
+                        });
+
                         setEditModalVisible(false);
                         setEditingGoal(null);
                         Alert.alert(
@@ -158,17 +300,50 @@ const SavingsTracker = () => {
             return;
         }
 
-        setSavingsGoals([
-            ...savingsGoals,
-            {
-                id: Date.now().toString(),
-                name: newGoal.name.trim(),
-                target: parseFloat(newGoal.target),
-                saved: 0,
-            },
-        ]);
+        // const newGoalItem = {
+        //     id: Date.now().toString(),
+        //     name: newGoal.name.trim(),
+        //     target: parseFloat(newGoal.target),
+        //     saved: 0,
+        // };
+        const target = parseFloat(newGoal.target);
+        const newGoalItem = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: newGoal.name.trim(),
+            target: target,
+            saved: 0,
+        };
+
+        // Add goal to all months with zero target except current month
+        const updatedMonthlyData = { ...savingsData.monthlyData };
+        Object.keys(updatedMonthlyData).forEach(monthKey => {
+            if (monthKey !== currentMonthKey) {
+                updatedMonthlyData[monthKey] = {
+                    ...updatedMonthlyData[monthKey],
+                    goals: [
+                        ...updatedMonthlyData[monthKey].goals,
+                        { ...newGoalItem, target: 0, saved: 0 }
+                    ]
+                };
+            }
+        });
+
+        // Add goal to current month with specified target
+        updatedMonthlyData[currentMonthKey] = {
+            ...updatedMonthlyData[currentMonthKey],
+            goals: [
+                ...(updatedMonthlyData[currentMonthKey]?.goals || []),
+                newGoalItem
+            ]
+        };
+
+        setSavingsData({
+            ...savingsData,
+            monthlyData: updatedMonthlyData
+        });
+
         setModalVisible(false);
-        setNewGoal({ name: '', target: '' });
+        setNewGoal({ name: '', target: '', saved: 0 });
 
         Alert.alert(
             "Goal Added",
@@ -179,9 +354,9 @@ const SavingsTracker = () => {
     const renderSavingsGoal = ({ item }) => {
         const progressPercentage = (item.saved / item.target) * 100;
         return (
-            <View style={styles.goalItem}>
-                <View style={styles.goalHeader}>
-                    <Text style={styles.goalName}>{item.name}</Text>
+            <View style={savingsTrackerStyles.goalItem}>
+                <View style={savingsTrackerStyles.goalHeader}>
+                    <Text style={savingsTrackerStyles.goalName}>{item.name}</Text>
                     <TouchableOpacity
                         onPress={() => handleEditGoal(item)}
                         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
@@ -189,10 +364,10 @@ const SavingsTracker = () => {
                         <Ionicons name="pencil" size={20} color="#666" />
                     </TouchableOpacity>
                 </View>
-                <View style={styles.progressBar}>
+                <View style={savingsTrackerStyles.progressBar}>
                     <View
                         style={[
-                            styles.progressFill,
+                            savingsTrackerStyles.progressFill,
                             {
                                 width: `${Math.min(progressPercentage, 100)}%`,
                                 backgroundColor: progressPercentage >= 100 ? '#4CAF50' : '#4CAF50'
@@ -200,16 +375,54 @@ const SavingsTracker = () => {
                         ]}
                     />
                 </View>
-                <Text style={styles.goalText}>
+                <Text style={savingsTrackerStyles.goalText}>
                     Target: Ksh {item.target.toLocaleString()} | Saved: Ksh {item.saved.toLocaleString()}
                 </Text>
                 <Text style={[
-                    styles.goalPercentage,
+                    savingsTrackerStyles.goalPercentage,
                     { color: progressPercentage >= 100 ? '#4CAF50' : '#4CAF50' }
                 ]}>
                     {Math.round(progressPercentage)}% Complete
                 </Text>
             </View>
+        );
+    };
+
+    // Chart rendering with safety checks
+    const renderChart = () => {
+        const hasData = chartData.length > 0;
+        const relevantTotal = chartViewIndex === 0 ? totalSavings : totalTarget;
+
+        if (!hasData || relevantTotal === 0) {
+            return (
+                <View style={savingsTrackerStyles.emptyChartContainer}>
+                    <Text style={savingsTrackerStyles.emptyChartText}>
+                        {chartViewIndex === 0
+                            ? "No savings recorded for this month yet"
+                            : "No savings targets set for this month yet"}
+                    </Text>
+                    <Text style={savingsTrackerStyles.emptyChartSubtext}>
+                        {chartViewIndex === 0
+                            ? "Add savings to see the distribution"
+                            : "Set savings targets to see the distribution"}
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <PieChart
+                data={chartData}
+                width={screenWidth - 32}
+                height={220}
+                chartConfig={{
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                }}
+                accessor="value"
+                backgroundColor="transparent"
+                paddingLeft="15"
+                absolute={!showPercentages}
+            />
         );
     };
 
@@ -221,40 +434,41 @@ const SavingsTracker = () => {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={savingsTrackerStyles.safeArea}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <ScreenLayout headerProps={screenHeaderProps}>
-                <View style={styles.container}>
+                <View style={savingsTrackerStyles.container}>
+                    <MonthNavigation />
                     {/* Total Savings Overview */}
-                    <View style={styles.overviewContainer}>
-                        <Text style={styles.overviewTitle}>Total Savings Overview</Text>
-                        <View style={styles.overviewDetails}>
-                            <View style={styles.overviewItem}>
-                                <Text style={styles.overviewLabel}>Target</Text>
-                                <Text style={styles.overviewAmount}>
+                    <View style={savingsTrackerStyles.overviewContainer}>
+                        <Text style={savingsTrackerStyles.overviewTitle}>Total Savings Overview</Text>
+                        <View style={savingsTrackerStyles.overviewDetails}>
+                            <View style={savingsTrackerStyles.overviewItem}>
+                                <Text style={savingsTrackerStyles.overviewLabel}>Target</Text>
+                                <Text style={savingsTrackerStyles.overviewAmount}>
                                     Ksh {totalTarget.toLocaleString()}
                                 </Text>
                             </View>
-                            <View style={styles.overviewDivider} />
-                            <View style={styles.overviewItem}>
-                                <Text style={styles.overviewLabel}>Saved</Text>
-                                <Text style={[styles.overviewAmount, { color: totalTarget > totalSavings ? '#FF6B6B' : '#4CAF50' }]}>
+                            <View style={savingsTrackerStyles.overviewDivider} />
+                            <View style={savingsTrackerStyles.overviewItem}>
+                                <Text style={savingsTrackerStyles.overviewLabel}>Saved</Text>
+                                <Text style={[savingsTrackerStyles.overviewAmount, { color: totalTarget > totalSavings ? '#FF6B6B' : '#4CAF50' }]}>
                                     Ksh {totalSavings.toLocaleString()}
                                 </Text>
                             </View>
                         </View>
-                        <Text style={styles.overviewSubtext}>
+                        <Text style={savingsTrackerStyles.overviewSubtext}>
                             💡 Regular savings help build a strong financial foundation
                         </Text>
                     </View>
 
                     {/* Chart Section */}
-                    <View style={styles.chartContainer}>
-                        <View style={styles.chartHeader}>
-                            <Text style={styles.chartTitle}>Savings Allocation</Text>
-                            <View style={styles.chartControls}>
-                                <View style={styles.toggleContainer}>
-                                    <Text style={styles.toggleLabel}>Show %</Text>
+                    <View style={savingsTrackerStyles.chartContainer}>
+                        <View style={savingsTrackerStyles.chartHeader}>
+                            <Text style={savingsTrackerStyles.chartTitle}>Savings Allocation</Text>
+                            <View style={savingsTrackerStyles.chartControls}>
+                                <View style={savingsTrackerStyles.toggleContainer}>
+                                    <Text style={savingsTrackerStyles.toggleLabel}>Show %</Text>
                                     <Switch
                                         value={showPercentages}
                                         onValueChange={setShowPercentages}
@@ -262,8 +476,8 @@ const SavingsTracker = () => {
                                         thumbColor={showPercentages ? "#007AFF" : "#f4f3f4"}
                                     />
                                 </View>
-                                <View style={styles.toggleContainer}>
-                                    <Text style={styles.toggleLabel}>Chart</Text>
+                                <View style={savingsTrackerStyles.toggleContainer}>
+                                    <Text style={savingsTrackerStyles.toggleLabel}>Chart</Text>
                                     <Switch
                                         value={showChart}
                                         onValueChange={setShowChart}
@@ -273,69 +487,70 @@ const SavingsTracker = () => {
                                 </View>
                             </View>
                         </View>
-                        <View style={styles.chartFilterContainer}>
+                        <View style={savingsTrackerStyles.chartFilterContainer}>
                             <TouchableOpacity
                                 style={[
-                                    styles.chartViewButton,
-                                    chartViewIndex === 0 && styles.activeChartViewButton
+                                    savingsTrackerStyles.chartViewButton,
+                                    chartViewIndex === 0 && savingsTrackerStyles.activeChartViewButton
                                 ]}
                                 onPress={() => setChartViewIndex(0)}
                             >
                                 <Text style={[
-                                    styles.chartViewButtonText,
-                                    chartViewIndex === 0 && styles.activeChartViewButtonText
+                                    savingsTrackerStyles.chartViewButtonText,
+                                    chartViewIndex === 0 && savingsTrackerStyles.activeChartViewButtonText
                                 ]}>
                                     By Saved
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[
-                                    styles.chartViewButton,
-                                    chartViewIndex === 1 && styles.activeChartViewButton
+                                    savingsTrackerStyles.chartViewButton,
+                                    chartViewIndex === 1 && savingsTrackerStyles.activeChartViewButton
                                 ]}
                                 onPress={() => setChartViewIndex(1)}
                             >
                                 <Text style={[
-                                    styles.chartViewButtonText,
-                                    chartViewIndex === 1 && styles.activeChartViewButtonText
+                                    savingsTrackerStyles.chartViewButtonText,
+                                    chartViewIndex === 1 && savingsTrackerStyles.activeChartViewButtonText
                                 ]}>
                                     By Target
                                 </Text>
                             </TouchableOpacity>
                         </View>
 
-                        {showChart && savingsGoals.length > 0 && (
-                            <View style={styles.chartWrapper}>
-                                <PieChart
-                                    data={chartData}
-                                    width={screenWidth - 32}
-                                    height={220}
-                                    chartConfig={{
-                                        color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                                    }}
-                                    accessor="value"
-                                    backgroundColor="transparent"
-                                    paddingLeft="15"
-                                    absolute={!showPercentages}
-                                />
+                        {showChart && (
+                            <View style={savingsTrackerStyles.chartWrapper}>
+                                {renderChart()}
                             </View>
                         )}
                     </View>
 
                     {/* Savings Goals List */}
                     <FlatList
-                        data={savingsGoals}
+                        data={currentGoals}
                         renderItem={renderSavingsGoal}
                         keyExtractor={item => item.id}
+                        style={savingsTrackerStyles.goalsList}
+                        contentContainerStyle={savingsTrackerStyles.goalsListContent}
+                        ListEmptyComponent={() => (
+                            <View style={savingsTrackerStyles.emptyChartContainer}>
+                                <Text style={savingsTrackerStyles.emptyListText}>
+                                    No Savings Goals yet
+                                </Text>
+                                <Text style={savingsTrackerStyles.emptyListSubtext}>
+                                    Tap the "Add Goal" button to create your first Goal
+                                </Text>
+                            </View>
+                        )}
                     />
 
                     {/* Add Goal Button */}
                     <TouchableOpacity
-                        style={styles.floatingAddButton}
+                        style={savingsTrackerStyles.floatingAddButton}
                         onPress={() => setModalVisible(true)}
                     >
                         <Ionicons name="add" size={24} color="#fff" />
-                        <Text style={styles.addButtonText}>Add Goal</Text>
+                        <Text style={savingsTrackerStyles.addButtonText}>Add Goal</Text>
                     </TouchableOpacity>
 
                     {/* Add Goal Modal */}
@@ -345,31 +560,31 @@ const SavingsTracker = () => {
                         visible={modalVisible}
                         onRequestClose={() => setModalVisible(false)}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalView}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Add New Savings Goal</Text>
+                        <View style={savingsTrackerStyles.modalOverlay}>
+                            <View style={savingsTrackerStyles.modalView}>
+                                <View style={savingsTrackerStyles.modalHeader}>
+                                    <Text style={savingsTrackerStyles.modalTitle}>Add New Savings Goal</Text>
                                     <TouchableOpacity
                                         onPress={() => setModalVisible(false)}
-                                        style={styles.modalCloseButton}
+                                        style={savingsTrackerStyles.modalCloseButton}
                                     >
                                         <Ionicons name="close" size={24} color="#666" />
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={styles.modalTip}>
+                                <Text style={savingsTrackerStyles.modalTip}>
                                     💡 Set specific, achievable savings goals for your business growth
                                 </Text>
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={savingsTrackerStyles.input}
                                     placeholder="Goal Name (e.g., Emergency Fund)"
                                     value={newGoal.name}
                                     onChangeText={(text) => setNewGoal({ ...newGoal, name: text })}
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={savingsTrackerStyles.input}
                                     placeholder="Target Amount (Ksh)"
                                     keyboardType="numeric"
                                     value={newGoal.target}
@@ -377,10 +592,10 @@ const SavingsTracker = () => {
                                 />
 
                                 <TouchableOpacity
-                                    style={[styles.modalAddButton, { backgroundColor: '#007AFF' }]}
+                                    style={[savingsTrackerStyles.modalAddButton, { backgroundColor: '#007AFF' }]}
                                     onPress={addSavingsGoal}
                                 >
-                                    <Text style={[styles.modalAddButtonText, { color: '#FFFFFF' }]}>
+                                    <Text style={[savingsTrackerStyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                         Add Goal
                                     </Text>
                                 </TouchableOpacity>
@@ -395,24 +610,24 @@ const SavingsTracker = () => {
                         visible={editModalVisible}
                         onRequestClose={() => setEditModalVisible(false)}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalView}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Edit Savings Goal</Text>
+                        <View style={savingsTrackerStyles.modalOverlay}>
+                            <View style={savingsTrackerStyles.modalView}>
+                                <View style={savingsTrackerStyles.modalHeader}>
+                                    <Text style={savingsTrackerStyles.modalTitle}>Edit Savings Goal</Text>
                                     <TouchableOpacity
                                         onPress={() => setEditModalVisible(false)}
-                                        style={styles.modalCloseButton}
+                                        style={savingsTrackerStyles.modalCloseButton}
                                     >
                                         <Ionicons name="close" size={24} color="#666" />
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={styles.modalTip}>
+                                <Text style={savingsTrackerStyles.modalTip}>
                                     💡 Update your goal details or adjust your progress
                                 </Text>
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={savingsTrackerStyles.input}
                                     placeholder="Goal Name"
                                     value={editingGoal?.newName}
                                     onChangeText={(text) => setEditingGoal({
@@ -422,7 +637,7 @@ const SavingsTracker = () => {
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={savingsTrackerStyles.input}
                                     placeholder="Target Amount (Ksh)"
                                     keyboardType="numeric"
                                     value={editingGoal?.newTarget}
@@ -433,7 +648,7 @@ const SavingsTracker = () => {
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={savingsTrackerStyles.input}
                                     placeholder="Amount Saved (Ksh)"
                                     keyboardType="numeric"
                                     value={editingGoal?.newSaved}
@@ -443,21 +658,21 @@ const SavingsTracker = () => {
                                     })}
                                 />
 
-                                <View style={styles.editModalButtons}>
+                                <View style={savingsTrackerStyles.editModalButtons}>
                                     <TouchableOpacity
-                                        style={[styles.modalAddButton, { backgroundColor: '#007AFF' }]}
+                                        style={[savingsTrackerStyles.modalAddButton, { backgroundColor: '#007AFF' }]}
                                         onPress={handleUpdateGoal}
                                     >
-                                        <Text style={[styles.modalAddButtonText, { color: '#FFFFFF' }]}>
+                                        <Text style={[savingsTrackerStyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                             Update Goal
                                         </Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.modalDeleteButton]}
+                                        style={[savingsTrackerStyles.modalDeleteButton]}
                                         onPress={handleDeleteGoal}
                                     >
-                                        <Text style={styles.modalDeleteButtonText}>
+                                        <Text style={savingsTrackerStyles.modalDeleteButtonText}>
                                             Delete Goal
                                         </Text>
                                     </TouchableOpacity>
@@ -470,271 +685,5 @@ const SavingsTracker = () => {
         </SafeAreaView>
     );
 };
-
-//Savings Tracker styles
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    // Overview Section
-    overviewContainer: {
-        backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-        elevation: 2,
-    },
-    overviewTitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 8,
-    },
-    overviewAmount: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1a1a1a',
-        marginBottom: 8,
-    },
-    overviewSubtext: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-    },
-    overviewDetails: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginVertical: 12,
-    },
-    overviewItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    overviewLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    overviewDivider: {
-        width: 1,
-        backgroundColor: '#ddd',
-        marginHorizontal: 16,
-    },
-
-    // Chart Section
-    chartContainer: {
-        marginBottom: 16,
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-    },
-    chartHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    chartTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#444',
-    },
-    chartControls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    toggleLabel: {
-        marginRight: 8,
-        fontSize: 14,
-        color: '#666',
-    },
-    chartWrapper: {
-        alignItems: 'center',
-    },
-    chartFilterContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: 15,
-    },
-    chartViewButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        marginHorizontal: 6,
-    },
-    activeChartViewButton: {
-        backgroundColor: '#81b0ff',
-    },
-    chartViewButtonText: {
-        fontSize: 14,
-        color: '#666',
-    },
-    activeChartViewButtonText: {
-        color: '#007AFF',
-        fontWeight: 'bold',
-    },
-
-    // Goals List
-    goalItem: {
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
-        elevation: 2,
-        borderLeftWidth: 4,
-        borderLeftColor: '#007AFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-    },
-    goalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    goalName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1a1a1a',
-        flex: 1,
-    },
-    goalText: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    goalPercentage: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    progressBar: {
-        height: 12,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 6,
-        marginVertical: 8,
-    },
-    progressFill: {
-        height: 12,
-        borderRadius: 6,
-    },
-
-    // Floating Add Button
-    floatingAddButton: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#007AFF',
-        borderRadius: 30,
-        padding: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        zIndex: 1000,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-    addButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-
-    // Modal Styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalView: {
-        width: '90%',
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#444',
-    },
-    modalCloseButton: {
-        padding: 5,
-    },
-    modalTip: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    input: {
-        width: '100%',
-        height: 45,
-        borderColor: '#DDD',
-        borderWidth: 1,
-        borderRadius: 8,
-        marginBottom: 15,
-        paddingHorizontal: 12,
-        fontSize: 16,
-    },
-    modalAddButton: {
-        width: '100%',
-        padding: 15,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 10,
-    },
-    modalAddButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    editModalButtons: {
-        width: '100%',
-        gap: 10,
-    },
-    modalDeleteButton: {
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#FF6B6B',
-    },
-    modalDeleteButtonText: {
-        color: '#FF6B6B',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-});
 
 export default SavingsTracker;

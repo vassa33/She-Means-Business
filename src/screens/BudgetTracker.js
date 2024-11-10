@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal, TextInput, StatusBar, Alert, Pressable, Switch, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Modal, TextInput, StatusBar, Alert, Pressable, Switch, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppContext } from '../context/AppContext';
 import { PieChart } from 'react-native-chart-kit';
+import budgetTrackerstyles from '../styles/BudgetTrackerStyles';
 
 const CHART_COLORS = [
     '#4E79A7', // Steel Blue
@@ -28,7 +29,7 @@ const BudgetTracker = () => {
     const [editingCategory, setEditingCategory] = useState(null);
     const [tooltipVisible, setTooltipVisible] = useState(null);
     const [showLogTooltip, setShowLogTooltip] = useState(false);
-    const [showChart, setShowChart] = useState(true);
+    const [showChart, setShowChart] = useState(false);
     const [showPercentages, setShowPercentages] = useState(false);
     const [chartViewIndex, setChartViewIndex] = useState(0); // 0 for budget, 1 for spent
     const screenWidth = Dimensions.get('window').width;
@@ -43,24 +44,138 @@ const BudgetTracker = () => {
         setCurrentScreen('Budget Tracker');
     }, []);
 
+    // New state for month navigation
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Function to format the current month and year
+    const formatMonthYear = (date) => {
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    // Functions to handle month navigation
+    const goToPreviousMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() - 1);
+            return newDate;
+        });
+    };
+
+    const goToNextMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() + 1);
+            return newDate;
+        });
+    };
+
+    // Modified data structure to handle monthly budgets
+    const getMonthKey = (date) => {
+        return `${date.getFullYear()}-${date.getMonth() + 1}`;
+    };
+
+    const currentMonthKey = getMonthKey(currentDate);
+
+    // Initialize monthly budget data with zero budgets
+    useEffect(() => {
+        if (!budgetData.monthlyBudgets) {
+            // Initialize first month
+            setBudgetData({
+                ...budgetData,
+                monthlyBudgets: {
+                    [currentMonthKey]: {
+                        categories: []
+                    }
+                }
+            });
+        } else if (!budgetData.monthlyBudgets[currentMonthKey]) {
+            // Get category names from any existing month
+            const existingMonths = Object.keys(budgetData.monthlyBudgets);
+            const categoryTemplates = existingMonths.length > 0
+                ? budgetData.monthlyBudgets[existingMonths[0]].categories.map(cat => ({
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                    name: cat.name,
+                    budget: 0, // Start with zero budget
+                    spent: 0
+                }))
+                : [];
+
+            setBudgetData({
+                ...budgetData,
+                monthlyBudgets: {
+                    ...budgetData.monthlyBudgets,
+                    [currentMonthKey]: {
+                        categories: categoryTemplates
+                    }
+                }
+            });
+        }
+    }, [currentMonthKey]);
+
+    // Modified to use monthly categories
+    const currentCategories = useMemo(() => {
+        return budgetData.monthlyBudgets?.[currentMonthKey]?.categories || [];
+    }, [budgetData.monthlyBudgets, currentMonthKey]);
+
+    // Add month navigation UI at the top
+    const MonthNavigation = () => (
+        <View style={budgetTrackerstyles.monthNavigationContainer}>
+            <TouchableOpacity
+                onPress={goToPreviousMonth}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+
+            <Text style={budgetTrackerstyles.currentMonthText}>
+                {formatMonthYear(currentDate)}
+            </Text>
+
+            <TouchableOpacity
+                onPress={goToNextMonth}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
+            </TouchableOpacity>
+        </View>
+    );
+
+    // Chart data calculations with safety checks
     const { totalBudget, totalSpent, chartData, percentageAllocations } = useMemo(() => {
-        const total = budgetData.categories.reduce((sum, cat) => sum + cat.budget, 0);
-        const spent = budgetData.categories.reduce((sum, cat) => sum + (cat.spent || 0), 0);
+        const total = currentCategories.reduce((sum, cat) => sum + cat.budget, 0);
+        const spent = currentCategories.reduce((sum, cat) => sum + (cat.spent || 0), 0);
 
-        const pieData = budgetData.categories.map((cat, index) => ({
-            name: cat.name,
-            budget: cat.budget,
-            spent: cat.spent || 0,
-            color: CHART_COLORS[index % CHART_COLORS.length],
-            legendFontColor: '#7F7F7F',
-            legendFontSize: 12,
-            value: showPercentages ? (chartViewIndex === 0 ? (cat.budget / total) * 100 : (cat.spent / spent) * 100) : (chartViewIndex === 0 ? cat.budget : cat.spent)
-        }));
+        // Only create chart data if we have valid numbers to show
+        const pieData = currentCategories
+            .filter(cat => {
+                // For budget view, include categories with budget > 0
+                // For spent view, include categories with spent > 0
+                return chartViewIndex === 0 ? cat.budget > 0 : cat.spent > 0;
+            })
+            .map((cat, index) => {
+                const value = showPercentages
+                    ? (chartViewIndex === 0
+                        ? (total > 0 ? (cat.budget / total) * 100 : 0)
+                        : (spent > 0 ? (cat.spent / spent) * 100 : 0))
+                    : (chartViewIndex === 0 ? cat.budget : cat.spent);
 
-        const allocations = budgetData.categories.map(cat => ({
-            name: cat.name,
-            percentage: ((cat.budget / total) * 100).toFixed(1)
-        }));
+                return {
+                    name: cat.name,
+                    budget: cat.budget,
+                    spent: cat.spent || 0,
+                    color: CHART_COLORS[index % CHART_COLORS.length],
+                    legendFontColor: '#7F7F7F',
+                    legendFontSize: 12,
+                    value: value
+                };
+            });
+
+        const allocations = currentCategories
+            .filter(cat => cat.budget > 0)
+            .map(cat => ({
+                name: cat.name,
+                percentage: total > 0 ? ((cat.budget / total) * 100).toFixed(1) : '0'
+            }));
 
         return {
             totalBudget: total,
@@ -68,7 +183,7 @@ const BudgetTracker = () => {
             chartData: pieData,
             percentageAllocations: allocations
         };
-    }, [budgetData.categories, showPercentages, chartViewIndex]);
+    }, [currentCategories, showPercentages, chartViewIndex]);
 
     const addCategory = () => {
         if (!newCategory.name.trim()) {
@@ -81,23 +196,47 @@ const BudgetTracker = () => {
         }
 
         const budget = parseFloat(newCategory.budget);
-        const newCategories = [
-            ...budgetData.categories,
-            {
-                id: Date.now().toString(),
-                name: newCategory.name.trim(),
-                budget: budget,
-                spent: 0,
-            },
-        ];
+        const newCategoryItem = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: newCategory.name.trim(),
+            budget: budget,
+            spent: 0,
+        };
 
-        setBudgetData({ ...budgetData, categories: newCategories });
+        // Add category to all months with zero budget except current month
+        const updatedMonthlyBudgets = { ...budgetData.monthlyBudgets };
+        Object.keys(updatedMonthlyBudgets).forEach(monthKey => {
+            if (monthKey !== currentMonthKey) {
+                updatedMonthlyBudgets[monthKey] = {
+                    ...updatedMonthlyBudgets[monthKey],
+                    categories: [
+                        ...updatedMonthlyBudgets[monthKey].categories,
+                        { ...newCategoryItem, budget: 0, spent: 0 }
+                    ]
+                };
+            }
+        });
+
+        // Add category to current month with specified budget
+        updatedMonthlyBudgets[currentMonthKey] = {
+            ...updatedMonthlyBudgets[currentMonthKey],
+            categories: [
+                ...(updatedMonthlyBudgets[currentMonthKey]?.categories || []),
+                newCategoryItem
+            ]
+        };
+
+        setBudgetData({
+            ...budgetData,
+            monthlyBudgets: updatedMonthlyBudgets
+        });
+
         setModalVisible(false);
         setNewCategory({ name: '', budget: '', spent: 0 });
 
         Alert.alert(
             "Category Added",
-            "Tip: A well-organized budget helps you make informed business decisions."
+            "New category has been added successfully!"
         );
     };
 
@@ -120,18 +259,33 @@ const BudgetTracker = () => {
             return;
         }
 
-        const updatedCategories = budgetData.categories.map(cat => {
-            if (cat.id === editingCategory.id) {
-                return {
-                    ...cat,
-                    name: editingCategory.newName.trim(),
-                    budget: parseFloat(editingCategory.newBudget)
-                };
-            }
-            return cat;
+        const updatedMonthlyBudgets = { ...budgetData.monthlyBudgets };
+
+        // Update category name across all months
+        Object.keys(updatedMonthlyBudgets).forEach(monthKey => {
+            updatedMonthlyBudgets[monthKey] = {
+                ...updatedMonthlyBudgets[monthKey],
+                categories: updatedMonthlyBudgets[monthKey].categories.map(cat => {
+                    if (cat.id === editingCategory.id) {
+                        return {
+                            ...cat,
+                            name: editingCategory.newName.trim(),
+                            // Only update budget for current month
+                            budget: monthKey === currentMonthKey
+                                ? parseFloat(editingCategory.newBudget)
+                                : cat.budget
+                        };
+                    }
+                    return cat;
+                })
+            };
         });
 
-        setBudgetData({ ...budgetData, categories: updatedCategories });
+        setBudgetData({
+            ...budgetData,
+            monthlyBudgets: updatedMonthlyBudgets
+        });
+
         setEditModalVisible(false);
         setEditingCategory(null);
 
@@ -141,10 +295,11 @@ const BudgetTracker = () => {
         );
     };
 
+    // Updated handleDeleteCategory function
     const handleDeleteCategory = () => {
         Alert.alert(
             "Delete Category",
-            `Are you sure you want to delete "${editingCategory.name}"?`,
+            `Are you sure you want to delete "${editingCategory.name}"? This will remove the category from all months.`,
             [
                 {
                     text: "Cancel",
@@ -154,15 +309,27 @@ const BudgetTracker = () => {
                     text: "Delete",
                     style: "destructive",
                     onPress: () => {
-                        const updatedCategories = budgetData.categories.filter(
-                            cat => cat.id !== editingCategory.id
-                        );
-                        setBudgetData({ ...budgetData, categories: updatedCategories });
+                        // Remove category from all months
+                        const updatedMonthlyBudgets = Object.keys(budgetData.monthlyBudgets).reduce((acc, monthKey) => {
+                            acc[monthKey] = {
+                                ...budgetData.monthlyBudgets[monthKey],
+                                categories: budgetData.monthlyBudgets[monthKey].categories
+                                    .filter(cat => cat.id !== editingCategory.id)
+                            };
+                            return acc;
+                        }, {});
+
+                        setBudgetData({
+                            ...budgetData,
+                            monthlyBudgets: updatedMonthlyBudgets
+                        });
+
                         setEditModalVisible(false);
                         setEditingCategory(null);
+
                         Alert.alert(
                             "Category Deleted",
-                            "The budget category has been removed successfully."
+                            "The budget category has been removed successfully from all months."
                         );
                     }
                 }
@@ -174,29 +341,29 @@ const BudgetTracker = () => {
         const spentPercentage = (item.spent / item.budget) * 100;
 
         return (
-            <View style={styles.categoryItem}>
-                <View style={styles.categoryHeader}>
-                    <Text style={styles.categoryName}>{item.name}</Text>
+            <View style={budgetTrackerstyles.categoryItem}>
+                <View style={budgetTrackerstyles.categoryHeader}>
+                    <Text style={budgetTrackerstyles.categoryName}>{item.name}</Text>
                     <TouchableOpacity
                         onPress={() => handleEditBudget(item)}
                         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                        style={styles.editIconContainer}
+                        style={budgetTrackerstyles.editIconContainer}
                     >
                         <Ionicons name="pencil" size={20} color="#666" />
                     </TouchableOpacity>
                 </View>
 
-                <Text style={styles.spentAmount}>
+                <Text style={budgetTrackerstyles.spentAmount}>
                     Spent: Ksh {(item.spent || 0).toLocaleString()}
                 </Text>
-                <Text style={styles.budgetAmount}>
+                <Text style={budgetTrackerstyles.budgetAmount}>
                     Budget: Ksh {item.budget.toLocaleString()}
                 </Text>
 
-                <View style={styles.progressBarContainer}>
+                <View style={budgetTrackerstyles.progressBarContainer}>
                     <View
                         style={[
-                            styles.progressBar,
+                            budgetTrackerstyles.progressBar,
                             {
                                 width: `${Math.min(spentPercentage, 100)}%`,
                                 backgroundColor: spentPercentage > 90 ? '#FF6B6B' : '#4CAF50'
@@ -208,6 +375,43 @@ const BudgetTracker = () => {
         );
     };
 
+    const renderChart = () => {
+        const hasData = chartData.length > 0;
+        const relevantTotal = chartViewIndex === 0 ? totalBudget : totalSpent;
+
+        if (!hasData || relevantTotal === 0) {
+            return (
+                <View style={budgetTrackerstyles.emptyChartContainer}>
+                    <Text style={budgetTrackerstyles.emptyChartText}>
+                        {chartViewIndex === 0
+                            ? "No budget allocations for this month yet"
+                            : "No expenses recorded for this month yet"}
+                    </Text>
+                    <Text style={budgetTrackerstyles.emptyChartSubtext}>
+                        {chartViewIndex === 0
+                            ? "Add budget to categories to see the distribution"
+                            : "Record expenses to see the distribution"}
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <PieChart
+                data={chartData}
+                width={screenWidth - 32}
+                height={220}
+                chartConfig={{
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                }}
+                accessor={showPercentages ? "value" : (chartViewIndex === 0 ? "budget" : "spent")}
+                backgroundColor="transparent"
+                paddingLeft="15"
+                absolute={!showPercentages}
+            />
+        );
+    };
+
     const screenHeaderProps = {
         title: "Budget Tracker",
         tooltipContent: "It's time to Budget! This is where you will really set your Business apart from the rest. Plan your spending and track your progress here.",
@@ -216,49 +420,50 @@ const BudgetTracker = () => {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={budgetTrackerstyles.safeArea}>
             <StatusBar barStyle="dark-content" backgroundColor="#fff" />
             <ScreenLayout headerProps={screenHeaderProps}>
-                <View style={styles.container}>
+                <View style={budgetTrackerstyles.container}>
+                    <MonthNavigation />
                     {/* Add Category Button */}
                     <TouchableOpacity
-                        style={styles.floatingAddButton}
+                        style={budgetTrackerstyles.floatingAddButton}
                         onPress={() => setModalVisible(true)}
                     >
                         <Ionicons name="add" size={24} color="#fff" />
-                        <Text style={styles.addButtonText}>Add Category</Text>
+                        <Text style={budgetTrackerstyles.addButtonText}>Add Category</Text>
                     </TouchableOpacity>
 
                     {/* Budget Overview */}
-                    <View style={styles.overviewContainer}>
-                        <Text style={styles.overviewTitle}>Total Budget Overview</Text>
-                        <View style={styles.overviewDetails}>
-                            <View style={styles.overviewItem}>
-                                <Text style={styles.overviewLabel}>Budget</Text>
-                                <Text style={styles.overviewAmount}>
+                    <View style={budgetTrackerstyles.overviewContainer}>
+                        <Text style={budgetTrackerstyles.overviewTitle}>Total Budget Overview</Text>
+                        <View style={budgetTrackerstyles.overviewDetails}>
+                            <View style={budgetTrackerstyles.overviewItem}>
+                                <Text style={budgetTrackerstyles.overviewLabel}>Budget</Text>
+                                <Text style={budgetTrackerstyles.overviewAmount}>
                                     Ksh {totalBudget.toLocaleString()}
                                 </Text>
                             </View>
-                            <View style={styles.overviewDivider} />
-                            <View style={styles.overviewItem}>
-                                <Text style={styles.overviewLabel}>Spent</Text>
-                                <Text style={[styles.overviewAmount, { color: totalSpent > totalBudget ? '#FF6B6B' : '#4CAF50' }]}>
+                            <View style={budgetTrackerstyles.overviewDivider} />
+                            <View style={budgetTrackerstyles.overviewItem}>
+                                <Text style={budgetTrackerstyles.overviewLabel}>Spent</Text>
+                                <Text style={[budgetTrackerstyles.overviewAmount, { color: totalSpent > totalBudget ? '#FF6B6B' : '#4CAF50' }]}>
                                     Ksh {totalSpent.toLocaleString()}
                                 </Text>
                             </View>
                         </View>
-                        <Text style={styles.overviewSubtext}>
+                        <Text style={budgetTrackerstyles.overviewSubtext}>
                             💡 Tip: A clear budget helps you make informed decisions and track business growth
                         </Text>
                     </View>
 
                     {/* Budget Tracker chart section */}
-                    <View style={styles.chartContainer}>
-                        <View style={styles.chartHeader}>
-                            <Text style={styles.chartTitle}>Budget Allocation</Text>
-                            <View style={styles.chartControls}>
-                                <View style={styles.toggleContainer}>
-                                    <Text style={styles.toggleLabel}>Show %</Text>
+                    <View style={budgetTrackerstyles.chartContainer}>
+                        <View style={budgetTrackerstyles.chartHeader}>
+                            <Text style={budgetTrackerstyles.chartTitle}>Budget Allocation</Text>
+                            <View style={budgetTrackerstyles.chartControls}>
+                                <View style={budgetTrackerstyles.toggleContainer}>
+                                    <Text style={budgetTrackerstyles.toggleLabel}>Show %</Text>
                                     <Switch
                                         value={showPercentages}
                                         onValueChange={setShowPercentages}
@@ -266,8 +471,8 @@ const BudgetTracker = () => {
                                         thumbColor={showPercentages ? "#007AFF" : "#f4f3f4"}
                                     />
                                 </View>
-                                <View style={styles.toggleContainer}>
-                                    <Text style={styles.toggleLabel}>Chart</Text>
+                                <View style={budgetTrackerstyles.toggleContainer}>
+                                    <Text style={budgetTrackerstyles.toggleLabel}>Chart</Text>
                                     <Switch
                                         value={showChart}
                                         onValueChange={setShowChart}
@@ -277,61 +482,61 @@ const BudgetTracker = () => {
                                 </View>
                             </View>
                         </View>
-                        <View style={styles.chartFilterContainer}>
+                        <View style={budgetTrackerstyles.chartFilterContainer}>
                             <TouchableOpacity
                                 style={[
-                                    styles.chartViewButton,
-                                    chartViewIndex === 0 && styles.activeChartViewButton
+                                    budgetTrackerstyles.chartViewButton,
+                                    chartViewIndex === 0 && budgetTrackerstyles.activeChartViewButton
                                 ]}
                                 onPress={() => setChartViewIndex(0)}
                             >
                                 <Text style={[
-                                    styles.chartViewButtonText,
-                                    chartViewIndex === 0 && styles.activeChartViewButtonText
+                                    budgetTrackerstyles.chartViewButtonText,
+                                    chartViewIndex === 0 && budgetTrackerstyles.activeChartViewButtonText
                                 ]}>
                                     By Budget
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[
-                                    styles.chartViewButton,
-                                    chartViewIndex === 1 && styles.activeChartViewButton
+                                    budgetTrackerstyles.chartViewButton,
+                                    chartViewIndex === 1 && budgetTrackerstyles.activeChartViewButton
                                 ]}
                                 onPress={() => setChartViewIndex(1)}
                             >
                                 <Text style={[
-                                    styles.chartViewButtonText,
-                                    chartViewIndex === 1 && styles.activeChartViewButtonText
+                                    budgetTrackerstyles.chartViewButtonText,
+                                    chartViewIndex === 1 && budgetTrackerstyles.activeChartViewButtonText
                                 ]}>
                                     By Spent
                                 </Text>
                             </TouchableOpacity>
                         </View>
 
-                        {showChart && budgetData.categories.length > 0 && (
-                            <View style={styles.chartWrapper}>
-                                <PieChart
-                                    data={chartData}
-                                    width={screenWidth - 32}
-                                    height={220}
-                                    chartConfig={{
-                                        color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                                    }}
-                                    accessor={showPercentages ? "value" : (chartViewIndex === 0 ? "budget" : "spent")}
-                                    backgroundColor="transparent"
-                                    paddingLeft="15"
-                                    absolute={!showPercentages}
-                                />
+                        {showChart && (
+                            <View style={budgetTrackerstyles.chartWrapper}>
+                                {renderChart()}
                             </View>
                         )}
                     </View>
 
                     {/* Categories List */}
                     <FlatList
-                        data={budgetData.categories}
+                        data={currentCategories}
                         renderItem={renderCategoryItem}
                         keyExtractor={item => item.id}
                         showsVerticalScrollIndicator={false}
+                        contentContainerStyle={budgetTrackerstyles.goalsListContent}
+                        ListEmptyComponent={() => (
+                            <View style={budgetTrackerstyles.emptyChartContainer}>
+                                <Text style={budgetTrackerstyles.emptyListText}>
+                                    No Budget set yet
+                                </Text>
+                                <Text style={budgetTrackerstyles.emptyListSubtext}>
+                                    Tap the "Add Category" button to create your first Budget
+                                </Text>
+                            </View>
+                        )}
                     />
 
                     {/* Add Category Modal */}
@@ -341,31 +546,31 @@ const BudgetTracker = () => {
                         visible={modalVisible}
                         onRequestClose={() => setModalVisible(false)}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalView}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Add New Category</Text>
+                        <View style={budgetTrackerstyles.modalOverlay}>
+                            <View style={budgetTrackerstyles.modalView}>
+                                <View style={budgetTrackerstyles.modalHeader}>
+                                    <Text style={budgetTrackerstyles.modalTitle}>Add New Category</Text>
                                     <TouchableOpacity
                                         onPress={() => setModalVisible(false)}
-                                        style={styles.modalCloseButton}
+                                        style={budgetTrackerstyles.modalCloseButton}
                                     >
                                         <Ionicons name="close" size={24} color="#666" />
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={styles.modalTip}>
+                                <Text style={budgetTrackerstyles.modalTip}>
                                     💡 Create specific categories to better track different aspects of your business
                                 </Text>
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={budgetTrackerstyles.input}
                                     placeholder="Category Name (e.g., Inventory, Marketing)"
                                     value={newCategory.name}
                                     onChangeText={(text) => setNewCategory({ ...newCategory, name: text })}
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={budgetTrackerstyles.input}
                                     placeholder="Budget Amount (Ksh)"
                                     keyboardType="numeric"
                                     value={newCategory.budget}
@@ -373,10 +578,10 @@ const BudgetTracker = () => {
                                 />
 
                                 <TouchableOpacity
-                                    style={[styles.modalAddButton, { backgroundColor: '#007AFF' }]}
+                                    style={[budgetTrackerstyles.modalAddButton, { backgroundColor: '#007AFF' }]}
                                     onPress={addCategory}
                                 >
-                                    <Text style={[styles.modalAddButtonText, { color: '#FFFFFF' }]}>
+                                    <Text style={[budgetTrackerstyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                         Add Category
                                     </Text>
                                 </TouchableOpacity>
@@ -391,24 +596,24 @@ const BudgetTracker = () => {
                         visible={editModalVisible}
                         onRequestClose={() => setEditModalVisible(false)}
                     >
-                        <View style={styles.modalOverlay}>
-                            <View style={styles.modalView}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Edit Category</Text>
+                        <View style={budgetTrackerstyles.modalOverlay}>
+                            <View style={budgetTrackerstyles.modalView}>
+                                <View style={budgetTrackerstyles.modalHeader}>
+                                    <Text style={budgetTrackerstyles.modalTitle}>Edit Category</Text>
                                     <TouchableOpacity
                                         onPress={() => setEditModalVisible(false)}
-                                        style={styles.modalCloseButton}
+                                        style={budgetTrackerstyles.modalCloseButton}
                                     >
                                         <Ionicons name="close" size={24} color="#666" />
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={styles.modalTip}>
+                                <Text style={budgetTrackerstyles.modalTip}>
                                     💡 Update your category details or delete if no longer needed
                                 </Text>
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={budgetTrackerstyles.input}
                                     placeholder="Category Name"
                                     value={editingCategory?.newName}
                                     onChangeText={(text) => setEditingCategory({
@@ -418,7 +623,7 @@ const BudgetTracker = () => {
                                 />
 
                                 <TextInput
-                                    style={styles.input}
+                                    style={budgetTrackerstyles.input}
                                     placeholder="Budget Amount (Ksh)"
                                     keyboardType="numeric"
                                     value={editingCategory?.newBudget}
@@ -428,21 +633,21 @@ const BudgetTracker = () => {
                                     })}
                                 />
 
-                                <View style={styles.editModalButtons}>
+                                <View style={budgetTrackerstyles.editModalButtons}>
                                     <TouchableOpacity
-                                        style={[styles.modalAddButton, { backgroundColor: '#007AFF' }]}
+                                        style={[budgetTrackerstyles.modalAddButton, { backgroundColor: '#007AFF' }]}
                                         onPress={handleUpdateCategory}
                                     >
-                                        <Text style={[styles.modalAddButtonText, { color: '#FFFFFF' }]}>
+                                        <Text style={[budgetTrackerstyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                             Update Category
                                         </Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[styles.modalDeleteButton]}
+                                        style={[budgetTrackerstyles.modalDeleteButton]}
                                         onPress={handleDeleteCategory}
                                     >
-                                        <Text style={styles.modalDeleteButtonText}>
+                                        <Text style={budgetTrackerstyles.modalDeleteButtonText}>
                                             Delete Category
                                         </Text>
                                     </TouchableOpacity>
@@ -455,306 +660,5 @@ const BudgetTracker = () => {
         </SafeAreaView>
     );
 };
-
-//Budget Tracker styles
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 16,
-    },
-    // Overview Section
-    overviewContainer: {
-        backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-        elevation: 2,
-    },
-    overviewTitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 8,
-    },
-    overviewAmount: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1a1a1a',
-        marginBottom: 8,
-    },
-    overviewSubtext: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-    },
-    overviewDetails: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginVertical: 12,
-    },
-    overviewItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    overviewLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    overviewDivider: {
-        width: 1,
-        backgroundColor: '#ddd',
-        marginHorizontal: 16,
-    },
-
-    // Chart Section
-    chartContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-        elevation: 2,
-    },
-    chartHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    chartTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    chartControls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    toggleLabel: {
-        marginRight: 8,
-        fontSize: 14,
-        color: '#666',
-    },
-    chartWrapper: {
-        alignItems: 'center',
-    },
-    chartFilterContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: 15,
-    },
-    chartViewButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        marginHorizontal: 6,
-    },
-    activeChartViewButton: {
-        backgroundColor: '#81b0ff',
-    },
-    chartViewButtonText: {
-        fontSize: 14,
-        color: '#666',
-    },
-    activeChartViewButtonText: {
-        color: '#007AFF',
-        fontWeight: 'bold',
-    },
-    categoryItem: {
-        backgroundColor: '#fff',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
-        elevation: 2,
-        borderLeftWidth: 4,
-        borderLeftColor: '#007AFF',
-    },
-    categoryHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    categoryName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1a1a1a',
-    },
-    progressBarContainer: {
-        height: 8,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 4,
-        marginTop: 8,
-        overflow: 'hidden',
-    },
-    progressBar: {
-        height: '100%',
-        borderRadius: 4,
-    },
-    spentAmount: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    editButton: {
-        padding: 8,
-    },
-    percentageText: {
-        fontSize: 14,
-        color: '#666',
-        marginRight: 8,
-    },
-    budgetAmount: {
-        fontSize: 14,
-        color: '#666',
-    },
-    educationalTip: {
-        backgroundColor: '#f8f9fa',
-        padding: 12,
-        borderRadius: 8,
-        marginTop: 8,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    tipText: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-        flex: 1,
-    },
-    tipCloseButton: {
-        padding: 4,
-    },
-    tipCloseText: {
-        fontSize: 16,
-        color: '#666',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    modalView: {
-        backgroundColor: "white",
-        borderRadius: 20,
-        padding: 24,
-        alignItems: "stretch",
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    modalCloseButton: {
-        padding: 4,
-    },
-    modalTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 8,
-        textAlign: 'center',
-        color: '#333',
-    },
-    modalTip: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    modalAddButton: {
-        backgroundColor: '#007AFF',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 2,
-        marginBottom: 12,
-    },
-    modalAddButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    modalDeleteButton: {
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#FF6B6B',
-    },
-    modalDeleteButtonText: {
-        color: '#FF6B6B',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    editModalButtons: {
-        marginTop: 8,
-    },
-    input: {
-        height: 50,
-        borderColor: '#ddd',
-        borderWidth: 1,
-        borderRadius: 12,
-        marginBottom: 16,
-        paddingHorizontal: 16,
-        fontSize: 16,
-        backgroundColor: '#fff',
-    },
-    floatingAddButton: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#007AFF',
-        borderRadius: 30,
-        padding: 15,
-        flexDirection: 'row',
-        alignItems: 'center',
-        zIndex: 1000,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-    addButtonText: {
-        color: '#fff',
-        marginLeft: 8,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    cancelButton: {
-        marginTop: 12,
-        padding: 16,
-        alignItems: 'center',
-    },
-    cancelButtonText: {
-        color: '#666',
-        fontSize: 16,
-    }
-});
 
 export default BudgetTracker;
