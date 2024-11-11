@@ -51,6 +51,7 @@ const Sidebar = () => {
         // logout();
         // clearUserData();
         // navigation.replace('Login');
+        navigation.navigate('Login')
         setIsSidebarVisible(false);
     };
 

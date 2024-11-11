@@ -1,8 +1,8 @@
-// layouts/HeaderLayout.js
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Tooltip from 'react-native-walkthrough-tooltip';
+import { useNavigation } from '@react-navigation/native';
 
 const HeaderLayout = ({
     title,
@@ -12,6 +12,8 @@ const HeaderLayout = ({
     showTooltip,
     setShowTooltip
 }) => {
+    const navigation = useNavigation(); // Add this line
+
     return (
         <View style={styles.header}>
             <TouchableOpacity
@@ -52,7 +54,10 @@ const HeaderLayout = ({
                 )}
             </View>
 
-            <TouchableOpacity style={styles.profileButton}>
+            <TouchableOpacity
+                style={styles.profileButton}
+                onPress={() => navigation.navigate('Profile')}
+            >
                 {profilePic ? (
                     <Image
                         source={{ uri: profilePic }}

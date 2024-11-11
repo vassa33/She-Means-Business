@@ -14,7 +14,7 @@ import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import dashboardStyles from '../styles/DashboardStyles';
 
-const Dashboard = () => {
+const Dashboard = ({ navigation }) => {
     const { profileData, setCurrentScreen } = useAppContext();
     const screenWidth = Dimensions.get("window").width;
     const [goalProgress, setGoalProgress] = useState(65); // Example progress
@@ -29,11 +29,16 @@ const Dashboard = () => {
             title: 'Next Goal',
             content: `${goalProgress}% towards ${profileData.currentGoal || 'Monthly Revenue Target'}`,
             icon: 'trophy-outline',
-            type: 'progress'
+            type: 'progress',
+            navigationTarget: 'SavingsTracker'
         },
         {
             title: 'Quick Actions',
-            content: ['Record Sale', 'Add Expense', 'Set Reminder'],
+            content: [
+                { label: 'Record Sale', target: 'TransactionLog' },
+                { label: 'Add Expense', target: 'TransactionLog' },
+                { label: 'Set Reminder', target: 'ActionCenter' }
+            ],
             icon: 'flash-outline',
             type: 'actions'
         },
@@ -42,9 +47,22 @@ const Dashboard = () => {
             content: 'Strong Growth',
             subtitle: 'Based on last 30 days',
             icon: 'pulse-outline',
-            type: 'health'
+            type: 'health',
+            navigationTarget: 'CashFlow'
         }
     ];
+
+    const handleInsightPress = (insight) => {
+        if (insight.navigationTarget) {
+            navigation.navigate(insight.navigationTarget);
+        }
+    };
+
+    const handleActionPress = (actionItem) => {
+        if (actionItem.target) {
+            navigation.navigate(actionItem.target);
+        }
+    };
 
     // Upcoming activities and deadlines
     const upcomingItems = [
@@ -87,6 +105,7 @@ const Dashboard = () => {
                                     style={[dashboardStyles.alertItem,
                                     item.type === 'deadline' ? dashboardStyles.alertUrgent : dashboardStyles.alertNormal
                                     ]}
+                                    onPress={() => navigation.navigate('ActionCenter')}
                                 >
                                     <Ionicons
                                         name={item.type === 'deadline' ? 'alarm-outline' : 'calendar-outline'}
@@ -110,6 +129,7 @@ const Dashboard = () => {
                                 <TouchableOpacity
                                     key={index}
                                     style={dashboardStyles.insightCard}
+                                    onPress={() => handleInsightPress(insight)}
                                 >
                                     <View style={dashboardStyles.insightHeader}>
                                         <View style={[dashboardStyles.iconContainer,
@@ -127,9 +147,13 @@ const Dashboard = () => {
 
                                     {insight.type === 'actions' && (
                                         <View style={dashboardStyles.actionButtons}>
-                                            {Array.isArray(insight.content) && insight.content.map((action, i) => (
-                                                <TouchableOpacity key={i} style={dashboardStyles.actionButton}>
-                                                    <Text style={dashboardStyles.actionText}>{action}</Text>
+                                            {insight.content.map((action, i) => (
+                                                <TouchableOpacity
+                                                    key={i}
+                                                    style={dashboardStyles.actionButton}
+                                                    onPress={() => handleActionPress(action)}
+                                                >
+                                                    <Text style={dashboardStyles.actionText}>{action.label}</Text>
                                                 </TouchableOpacity>
                                             ))}
                                         </View>
