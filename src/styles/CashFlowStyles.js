@@ -123,6 +123,30 @@ const CashFlowStyles = StyleSheet.create({
         fontWeight: '600',
         includeFontPadding: false, // Better vertical alignment
     },
+    chart: {
+        marginVertical: 8,
+        borderRadius: 16,
+    },
+    chartContainer: {
+        position: 'relative',
+        height: 320, // Adjust based on your needs
+    },
+    currencyNote: {
+        textAlign: 'center',
+        color: '#666',
+        fontSize: 12,
+        marginTop: 8,
+        marginBottom: 16,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        textAlign: 'center',
+        color: Colors.textSecondary,
+        fontSize: 12,
+        backgroundColor: Colors.background,
+        paddingVertical: 5,
+    },
     chartTypeSelector: {
         flexDirection: 'row',
         justifyContent: 'center',

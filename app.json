@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "She-Means-Business",
-    "slug": "She-Means-Business",
+    "name": "SMB Financial Manager",
+    "slug": "smb-financial-manager",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/icon.png",
@@ -14,14 +14,25 @@
     },
     "ios": {
       "supportsTablet": true,
-      "jsEngine": "hermes"
+      "bundleIdentifier": "com.smb.financialmanager",
+      "buildNumber": "1",
+      "jsEngine": "hermes",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "package": "com.smb.financialmanager",
+      "newArchEnabled": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff",
-        "jsEngine": "hermes"
-      }
+        "jsEngine": "hermes",
+        "newArchEnabled": true
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.smb.financialmanager",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -36,7 +47,8 @@
         }
       ],
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "@react-native-firebase/app"
     ],
     "experiments": {
       "typedRoutes": true

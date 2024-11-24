@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import ScreenLayout from '../layouts/ScreenLayout';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 import actionCenterStyles from '../styles/ActionCenterStyles';
 
 const ActionCenter = () => {
@@ -219,7 +219,6 @@ const ActionCenter = () => {
                     </View>
 
                     <View style={actionCenterStyles.datePickerContainer}>
-                        {/* <Text style={actionCenterStyles.datePickerLabel}>Deadline:</Text> */}
                         <TouchableOpacity
                             style={[
                                 actionCenterStyles.dateButton,

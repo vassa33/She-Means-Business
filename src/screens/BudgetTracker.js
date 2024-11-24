@@ -3,26 +3,28 @@ import { View, Text, TouchableOpacity, FlatList, Modal, TextInput, StatusBar, Al
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 import { PieChart } from 'react-native-chart-kit';
 import budgetTrackerstyles from '../styles/BudgetTrackerStyles';
+import { useInternalData } from '../contexts/InternalDataContext';
 
 const CHART_COLORS = [
-    '#4E79A7', // Steel Blue
-    '#F28E2B', // Sunset Orange
-    '#E15759', // Terra Cotta
-    '#76B7B2', // Teal
-    '#59A14F', // Moss Green
-    '#EDC948', // Goldenrod
-    '#B07AA1', // Lavender Purple
-    '#FF9DA7', // Rose Pink
-    '#9C755F', // Taupe
-    '#BAB0AC', // Silver
+    '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
+    '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC'
 ];
 
-
 const BudgetTracker = () => {
-    const { setCurrentScreen, budgetData, setBudgetData } = useAppContext();
+    const { setCurrentScreen } = useAppContext();
+    const {
+        budgetData,
+        setBudgetData,
+        addBudgetCategory,
+        updateBudgetCategory,
+        deleteBudgetCategory,
+        financialMetrics,
+        getMonthKey
+    } = useInternalData();
+
     const [modalVisible, setModalVisible] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: '', budget: '', spent: 0 });
@@ -31,50 +33,16 @@ const BudgetTracker = () => {
     const [showLogTooltip, setShowLogTooltip] = useState(false);
     const [showChart, setShowChart] = useState(false);
     const [showPercentages, setShowPercentages] = useState(false);
-    const [chartViewIndex, setChartViewIndex] = useState(0); // 0 for budget, 1 for spent
+    const [chartViewIndex, setChartViewIndex] = useState(0);
+    const [currentDate, setCurrentDate] = useState(new Date());
     const screenWidth = Dimensions.get('window').width;
 
-    const educationalTips = {
-        low: "💡 Tip: Consider allocating 20-30% of your budget to business growth activities.",
-        medium: "💡 Tip: Having 3-6 months of operating expenses as emergency fund is recommended.",
-        high: "💡 Tip: Consider reinvesting excess budget into inventory or equipment."
-    };
+    const currentMonthKey = getMonthKey();
 
     useEffect(() => {
         setCurrentScreen('Budget Tracker');
     }, []);
 
-    // New state for month navigation
-    const [currentDate, setCurrentDate] = useState(new Date());
-
-    // Function to format the current month and year
-    const formatMonthYear = (date) => {
-        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    };
-
-    // Functions to handle month navigation
-    const goToPreviousMonth = () => {
-        setCurrentDate(prevDate => {
-            const newDate = new Date(prevDate);
-            newDate.setMonth(prevDate.getMonth() - 1);
-            return newDate;
-        });
-    };
-
-    const goToNextMonth = () => {
-        setCurrentDate(prevDate => {
-            const newDate = new Date(prevDate);
-            newDate.setMonth(prevDate.getMonth() + 1);
-            return newDate;
-        });
-    };
-
-    // Modified data structure to handle monthly budgets
-    const getMonthKey = (date) => {
-        return `${date.getFullYear()}-${date.getMonth() + 1}`;
-    };
-
-    const currentMonthKey = getMonthKey(currentDate);
 
     // Initialize monthly budget data with zero budgets
     useEffect(() => {
@@ -112,80 +80,53 @@ const BudgetTracker = () => {
         }
     }, [currentMonthKey]);
 
-    // Modified to use monthly categories
+    // Get current categories from budgetData using monthKey
     const currentCategories = useMemo(() => {
         return budgetData.monthlyBudgets?.[currentMonthKey]?.categories || [];
     }, [budgetData.monthlyBudgets, currentMonthKey]);
 
-    // Add month navigation UI at the top
-    const MonthNavigation = () => (
-        <View style={budgetTrackerstyles.monthNavigationContainer}>
-            <TouchableOpacity
-                onPress={goToPreviousMonth}
-                style={budgetTrackerstyles.monthNavigationButton}
-            >
-                <Ionicons name="chevron-back" size={24} color="#007AFF" />
-            </TouchableOpacity>
-
-            <Text style={budgetTrackerstyles.currentMonthText}>
-                {formatMonthYear(currentDate)}
-            </Text>
-
-            <TouchableOpacity
-                onPress={goToNextMonth}
-                style={budgetTrackerstyles.monthNavigationButton}
-            >
-                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
-            </TouchableOpacity>
-        </View>
-    );
-
-    // Chart data calculations with safety checks
+    // Enhanced with actual spending data from financialMetrics
     const { totalBudget, totalSpent, chartData, percentageAllocations } = useMemo(() => {
-        const total = currentCategories.reduce((sum, cat) => sum + cat.budget, 0);
-        const spent = currentCategories.reduce((sum, cat) => sum + (cat.spent || 0), 0);
+        const budgetComparison = financialMetrics?.budgetComparison || [];
+        const categoriesWithMetrics = currentCategories.map(cat => {
+            const metrics = budgetComparison.find(b => b.id === cat.id) || {};
+            return {
+                ...cat,
+                spent: metrics.actual || 0
+            };
+        });
 
-        // Only create chart data if we have valid numbers to show
-        const pieData = currentCategories
-            .filter(cat => {
-                // For budget view, include categories with budget > 0
-                // For spent view, include categories with spent > 0
-                return chartViewIndex === 0 ? cat.budget > 0 : cat.spent > 0;
-            })
-            .map((cat, index) => {
-                const value = showPercentages
+        const total = categoriesWithMetrics.reduce((sum, cat) => sum + cat.budget, 0);
+        const spent = categoriesWithMetrics.reduce((sum, cat) => sum + cat.spent, 0);
+
+        const pieData = categoriesWithMetrics
+            .filter(cat => chartViewIndex === 0 ? cat.budget > 0 : cat.spent > 0)
+            .map((cat, index) => ({
+                name: cat.name,
+                budget: cat.budget,
+                spent: cat.spent,
+                color: CHART_COLORS[index % CHART_COLORS.length],
+                legendFontColor: '#7F7F7F',
+                legendFontSize: 12,
+                value: showPercentages
                     ? (chartViewIndex === 0
                         ? (total > 0 ? (cat.budget / total) * 100 : 0)
                         : (spent > 0 ? (cat.spent / spent) * 100 : 0))
-                    : (chartViewIndex === 0 ? cat.budget : cat.spent);
+                    : (chartViewIndex === 0 ? cat.budget : cat.spent)
+            }));
 
-                return {
-                    name: cat.name,
-                    budget: cat.budget,
-                    spent: cat.spent || 0,
-                    color: CHART_COLORS[index % CHART_COLORS.length],
-                    legendFontColor: '#7F7F7F',
-                    legendFontSize: 12,
-                    value: value
-                };
-            });
-
-        const allocations = currentCategories
+        const allocations = categoriesWithMetrics
             .filter(cat => cat.budget > 0)
             .map(cat => ({
                 name: cat.name,
                 percentage: total > 0 ? ((cat.budget / total) * 100).toFixed(1) : '0'
             }));
 
-        return {
-            totalBudget: total,
-            totalSpent: spent,
-            chartData: pieData,
-            percentageAllocations: allocations
-        };
-    }, [currentCategories, showPercentages, chartViewIndex]);
+        return { totalBudget: total, totalSpent: spent, chartData: pieData, percentageAllocations: allocations };
+    }, [currentCategories, showPercentages, chartViewIndex, financialMetrics]);
 
-    const addCategory = () => {
+    // Modified to use context functions
+    const handleAddCategory = () => {
         if (!newCategory.name.trim()) {
             Alert.alert('Missing Information', 'Please enter a category name');
             return;
@@ -196,48 +137,15 @@ const BudgetTracker = () => {
         }
 
         const budget = parseFloat(newCategory.budget);
-        const newCategoryItem = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        addBudgetCategory({
             name: newCategory.name.trim(),
-            budget: budget,
-            spent: 0,
-        };
-
-        // Add category to all months with zero budget except current month
-        const updatedMonthlyBudgets = { ...budgetData.monthlyBudgets };
-        Object.keys(updatedMonthlyBudgets).forEach(monthKey => {
-            if (monthKey !== currentMonthKey) {
-                updatedMonthlyBudgets[monthKey] = {
-                    ...updatedMonthlyBudgets[monthKey],
-                    categories: [
-                        ...updatedMonthlyBudgets[monthKey].categories,
-                        { ...newCategoryItem, budget: 0, spent: 0 }
-                    ]
-                };
-            }
-        });
-
-        // Add category to current month with specified budget
-        updatedMonthlyBudgets[currentMonthKey] = {
-            ...updatedMonthlyBudgets[currentMonthKey],
-            categories: [
-                ...(updatedMonthlyBudgets[currentMonthKey]?.categories || []),
-                newCategoryItem
-            ]
-        };
-
-        setBudgetData({
-            ...budgetData,
-            monthlyBudgets: updatedMonthlyBudgets
-        });
+            budget: budget
+        }, currentMonthKey);
 
         setModalVisible(false);
-        setNewCategory({ name: '', budget: '', spent: 0 });
+        setNewCategory({ name: '', budget: '' });
 
-        Alert.alert(
-            "Category Added",
-            "New category has been added successfully!"
-        );
+        Alert.alert("Category Added", "New category has been added successfully!");
     };
 
     const handleEditBudget = (category) => {
@@ -259,78 +167,35 @@ const BudgetTracker = () => {
             return;
         }
 
-        const updatedMonthlyBudgets = { ...budgetData.monthlyBudgets };
-
-        // Update category name across all months
-        Object.keys(updatedMonthlyBudgets).forEach(monthKey => {
-            updatedMonthlyBudgets[monthKey] = {
-                ...updatedMonthlyBudgets[monthKey],
-                categories: updatedMonthlyBudgets[monthKey].categories.map(cat => {
-                    if (cat.id === editingCategory.id) {
-                        return {
-                            ...cat,
-                            name: editingCategory.newName.trim(),
-                            // Only update budget for current month
-                            budget: monthKey === currentMonthKey
-                                ? parseFloat(editingCategory.newBudget)
-                                : cat.budget
-                        };
-                    }
-                    return cat;
-                })
-            };
-        });
-
-        setBudgetData({
-            ...budgetData,
-            monthlyBudgets: updatedMonthlyBudgets
-        });
+        updateBudgetCategory(
+            editingCategory.id,
+            {
+                name: editingCategory.newName.trim(),
+                budget: parseFloat(editingCategory.newBudget)
+            },
+            currentMonthKey
+        );
 
         setEditModalVisible(false);
         setEditingCategory(null);
 
-        Alert.alert(
-            "Category Updated",
-            "Your budget category has been successfully updated!"
-        );
+        Alert.alert("Category Updated", "Your budget category has been successfully updated!");
     };
 
-    // Updated handleDeleteCategory function
     const handleDeleteCategory = () => {
         Alert.alert(
             "Delete Category",
-            `Are you sure you want to delete "${editingCategory.name}"? This will remove the category from all months.`,
+            `Are you sure you want to delete "${editingCategory.name}"?`,
             [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
+                { text: "Cancel", style: "cancel" },
                 {
                     text: "Delete",
                     style: "destructive",
                     onPress: () => {
-                        // Remove category from all months
-                        const updatedMonthlyBudgets = Object.keys(budgetData.monthlyBudgets).reduce((acc, monthKey) => {
-                            acc[monthKey] = {
-                                ...budgetData.monthlyBudgets[monthKey],
-                                categories: budgetData.monthlyBudgets[monthKey].categories
-                                    .filter(cat => cat.id !== editingCategory.id)
-                            };
-                            return acc;
-                        }, {});
-
-                        setBudgetData({
-                            ...budgetData,
-                            monthlyBudgets: updatedMonthlyBudgets
-                        });
-
+                        deleteBudgetCategory(editingCategory.id, currentMonthKey);
                         setEditModalVisible(false);
                         setEditingCategory(null);
-
-                        Alert.alert(
-                            "Category Deleted",
-                            "The budget category has been removed successfully from all months."
-                        );
+                        Alert.alert("Category Deleted", "The budget category has been removed successfully.");
                     }
                 }
             ]
@@ -338,7 +203,9 @@ const BudgetTracker = () => {
     };
 
     const renderCategoryItem = ({ item }) => {
-        const spentPercentage = (item.spent / item.budget) * 100;
+        const metrics = financialMetrics?.budgetComparison?.find(b => b.id === item.id) || {};
+        const spentAmount = metrics.actual || 0;
+        const spentPercentage = (spentAmount / item.budget) * 100;
 
         return (
             <View style={budgetTrackerstyles.categoryItem}>
@@ -354,7 +221,7 @@ const BudgetTracker = () => {
                 </View>
 
                 <Text style={budgetTrackerstyles.spentAmount}>
-                    Spent: Ksh {(item.spent || 0).toLocaleString()}
+                    Spent: Ksh {spentAmount.toLocaleString()}
                 </Text>
                 <Text style={budgetTrackerstyles.budgetAmount}>
                     Budget: Ksh {item.budget.toLocaleString()}
@@ -412,6 +279,72 @@ const BudgetTracker = () => {
         );
     };
 
+    // Month Navigation Functions
+    const formatMonthYear = (date) => {
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    const handleMonthChange = (newDate) => {
+        const newMonthKey = getMonthKey(newDate);
+
+        // Ensure the new month exists in budgetData
+        setBudgetData(prev => {
+            if (!prev.monthlyBudgets[newMonthKey]) {
+                const updatedBudgets = { ...prev.monthlyBudgets };
+                const previousMonths = Object.keys(updatedBudgets).sort();
+                const previousMonth = previousMonths[previousMonths.length - 1];
+
+                // Copy categories from previous month with zero budgets
+                updatedBudgets[newMonthKey] = {
+                    categories: prev.monthlyBudgets[previousMonth]?.categories.map(cat => ({
+                        ...cat,
+                        budget: 0,
+                        spent: 0
+                    })) || []
+                };
+
+                return {
+                    ...prev,
+                    monthlyBudgets: updatedBudgets
+                };
+            }
+            return prev;
+        });
+
+        setCurrentDate(newDate);
+    };
+
+    // Month on Month View
+    const MonthNavigation = () => (
+        <View style={budgetTrackerstyles.monthNavigationContainer}>
+            <TouchableOpacity
+                onPress={() => {
+                    const newDate = new Date(currentDate);
+                    newDate.setMonth(currentDate.getMonth() - 1);
+                    handleMonthChange(newDate);
+                }}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+
+            <Text style={budgetTrackerstyles.currentMonthText}>
+                {formatMonthYear(currentDate)}
+            </Text>
+
+            <TouchableOpacity
+                onPress={() => {
+                    const newDate = new Date(currentDate);
+                    newDate.setMonth(currentDate.getMonth() + 1);
+                    handleMonthChange(newDate);
+                }}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
+            </TouchableOpacity>
+        </View>
+    );
+
     const screenHeaderProps = {
         title: "Budget Tracker",
         tooltipContent: "It's time to Budget! This is where you will really set your Business apart from the rest. Plan your spending and track your progress here.",
@@ -425,6 +358,7 @@ const BudgetTracker = () => {
             <ScreenLayout headerProps={screenHeaderProps}>
                 <View style={budgetTrackerstyles.container}>
                     <MonthNavigation />
+
                     {/* Add Category Button */}
                     <TouchableOpacity
                         style={budgetTrackerstyles.floatingAddButton}
@@ -579,7 +513,7 @@ const BudgetTracker = () => {
 
                                 <TouchableOpacity
                                     style={[budgetTrackerstyles.modalAddButton, { backgroundColor: '#007AFF' }]}
-                                    onPress={addCategory}
+                                    onPress={handleAddCategory}
                                 >
                                     <Text style={[budgetTrackerstyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                         Add Category

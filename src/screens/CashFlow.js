@@ -29,7 +29,7 @@ import {
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenLayout from '../layouts/ScreenLayout';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 import CashFlowStyles from '../styles/CashFlowStyles';
 
 // ======================================
@@ -200,7 +200,7 @@ const ScrollableChart = React.memo(({ children, height, yAxis, legend }) => {
     return (
         <View style={{ height, flexDirection: 'row' }}>
             {/* Fixed Y-Axis */}
-            <View style={{ width: 50 }}>
+            <View style={{ width: 60, marginLeft: 10 }}>
                 {yAxis}
             </View>
 
@@ -221,23 +221,6 @@ const ScrollableChart = React.memo(({ children, height, yAxis, legend }) => {
         </View>
     );
 });
-
-const formatXAxisLabel = (date, period) => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const weeks = ['week 1', 'week 2', 'week 3', 'week 4', 'week 5', 'week 6', 'week 7'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    if (period === 'week') {
-        const dayIndex = new Date(date).getDay();
-        return days[dayIndex];
-    } else if (period === 'month') {
-        return date.slice(-2); // Day of month
-    } else if (period === 'year') {
-        const monthIndex = parseInt(date.slice(5, 7)) - 1;
-        return months[monthIndex];
-    }
-    return date;
-};
 
 const DataPointTooltip = ({ value, date, visible, position }) => {
     if (!visible) return null;
@@ -444,6 +427,84 @@ const PeriodSelector = ({ selectedPeriod, setSelectedPeriod }) => (
     </View>
 );
 
+// Chart configuration settings
+const createChartConfig = (selectedPeriod, colors) => ({
+    backgroundColor: COLORS.background,
+    backgroundGradientFrom: COLORS.background,
+    backgroundGradientTo: COLORS.background,
+    decimalPlaces: 0,
+    color: (opacity = 1) => colors.primary,
+    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    style: { borderRadius: 16 },
+    propsForDots: {
+        r: "6",
+        strokeWidth: "2",
+        stroke: colors.primary
+    },
+    propsForLabels: {
+        fontSize: 10,
+    },
+    // Enhanced X-axis label formatting based on period
+    formatXLabel: (value, index) => {
+        switch (selectedPeriod) {
+            case 'week':
+                const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                return days[index] || '';
+            case 'month':
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return months[index] || '';
+            case 'year':
+                // Assuming your data starts from the current year and goes back
+                const currentYear = new Date().getFullYear();
+                return `${currentYear - (11 - index)}`; // Shows last 12 years
+            default:
+                return value;
+        }
+    }
+});
+
+const renderLineChart = (data, config, width, height, selectedPeriod = 'week') => (
+    <View>
+        <LineChart
+            data={data}
+            width={width}
+            height={height - 40} // Reduce height to accommodate the currency text
+            chartConfig={config}
+            bezier
+            style={[CashFlowStyles.chart, { paddingRight: 40 }]} // Add right padding for labels
+            withVerticalLabels={true}
+            withHorizontalLabels={false}
+            withInnerLines={true}
+            withOuterLines={true}
+            withDots={true}
+            withShadow={false}
+            segments={5}
+            horizontalLabelRotation={0}
+            yAxisLabel=""
+            fromZero={true}
+        />
+    </View>
+);
+
+const renderBarChart = (data, config, width, height, selectedPeriod = 'week') => (
+    <View>
+        <BarChart
+            data={data}
+            width={width}
+            height={height - 40} // Reduce height to accommodate the currency text
+            chartConfig={config}
+            bezier
+            style={[CashFlowStyles.chart, { paddingRight: 40 }]} // Add right padding for labels
+            withVerticalLabels={true}
+            withHorizontalLabels={false}
+            segments={5}
+            horizontalLabelRotation={0}
+            yAxisLabel=""
+            fromZero={true}
+        />
+    </View>
+);
+
 // ======================================
 // Main Component
 // ======================================
@@ -465,6 +526,8 @@ const CashFlow = () => {
     const [selectedChart, setSelectedChart] = useState('line'); // 'line', 'bar'
 
     const { setCurrentScreen } = useAppContext();
+
+    const chartConfig = useMemo(() => createChartConfig(selectedPeriod, COLORS), [selectedPeriod]);
 
     // ----------------
     // Effects
@@ -528,40 +591,39 @@ const CashFlow = () => {
     // ----------------
     const screenWidth = useMemo(() => Platform.OS === 'web' ? 500 : Dimensions.get('window').width, []);
 
-    const { netCashFlowData, inflowOutflowData, yAxisLabels } = useMemo(() => {
+    const { netCashFlowData, inflowOutflowData } = useMemo(() => {
         let dataToUse = cashFlowData || [];
         if (showProjections) {
             const projections = calculateProjections(cashFlowData, forecastPeriod, growthRate);
             dataToUse = [...cashFlowData, ...projections];
         }
 
-        // Calculate max value for y-axis scale
-        const maxValue = Math.max(
-            ...dataToUse.map(item => Math.max(item.inflows, item.outflows))
-        );
-        const yAxisStep = Math.ceil(maxValue / 5 / 1000) * 1000;
-        const yLabels = Array.from({ length: 6 }, (_, i) => (yAxisStep * i).toLocaleString());
+        // Generate appropriate labels based on period
+        const getLabels = () => {
+            switch (selectedPeriod) {
+                case 'week':
+                    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                case 'month':
+                    return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                case 'year':
+                    const currentYear = new Date().getFullYear();
+                    return Array.from({ length: 12 }, (_, i) => `${currentYear - (11 - i)}`);
+                default:
+                    return dataToUse.map(item => item.date);
+            }
+        };
 
         return {
             netCashFlowData: {
-                labels: dataToUse.map(item =>
-                    selectedPeriod === 'year'
-                        ? item.date.slice(5, 7)
-                        : item.date.slice(-2)
-                ),
+                labels: getLabels(),
                 datasets: [{
                     data: dataToUse.map(item => Math.max(0, item.inflows - item.outflows)),
                     color: (opacity = 1) => COLORS.success,
                     strokeWidth: 2
-                }],
-                //legend: ["Net Cash Flow"]
+                }]
             },
             inflowOutflowData: {
-                labels: dataToUse.map(item =>
-                    selectedPeriod === 'year'
-                        ? item.date.slice(5, 7)
-                        : item.date.slice(-2)
-                ),
+                labels: getLabels(),
                 datasets: [
                     {
                         data: dataToUse.map(item => item.inflows),
@@ -571,67 +633,19 @@ const CashFlow = () => {
                         data: dataToUse.map(item => item.outflows),
                         color: (opacity = 1) => COLORS.danger,
                     }
-                ],
-                //legend: ["Inflows", "Outflows"]
-            },
-            yAxisLabels: yLabels
+                ]
+            }
         };
     }, [cashFlowData, showProjections, forecastPeriod, growthRate, selectedPeriod]);
 
-    // Chart configuration settings
-    const chartConfig = useMemo(() => ({
-        backgroundColor: COLORS.background,
-        backgroundGradientFrom: COLORS.background,
-        backgroundGradientTo: COLORS.background,
-        decimalPlaces: 0,
-        color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-        labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-        style: {
-            borderRadius: 16,
-        },
-        propsForDots: {
-            r: "6",
-            strokeWidth: "2",
-            stroke: COLORS.primary
-        },
-        propsForBackgroundLines: {
-            strokeDasharray: '',
-            stroke: "rgba(0, 0, 0, 0.1)",
-            strokeWidth: 1
-        },
-        propsForLabels: {
-            fontSize: 12,
-            fontWeight: '600'
-        },
-        rotateLabels: 45,
-        //formatXLabel: (label) => formatXAxisLabel(label, selectedPeriod),
-        renderDotContent: ({ x, y, index, dataset }) => (
-            <TouchableOpacity
-                key={`dot-${index}`}
-                onPress={() => {
-                    const dataPoint = dataset.data[index];
-                    const date = netCashFlowData.labels[index];
-                    setTooltipData({
-                        value: dataPoint,
-                        date,
-                        visible: true,
-                        position: { x, y }
-                    });
-                }}
-                style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: 'white',
-                    borderWidth: 2,
-                    borderColor: dataset.color(1),
-                    position: 'absolute',
-                    left: x - 10,
-                    top: y - 10,
-                }}
-            />
-        )
-    }), [selectedPeriod, netCashFlowData.labels]);
+    // Generate Y-axis labels
+    const generateYAxisLabels = (dataToUse) => {
+        const maxValue = Math.max(
+            ...dataToUse.flatMap(item => [item.inflows, item.outflows])
+        );
+        const yAxisStep = Math.ceil(maxValue / 5 / 1000) * 1000;
+        return Array.from({ length: 6 }, (_, i) => (yAxisStep * i).toLocaleString());
+    };
 
     // ----------------
     // Event Handlers and Calculations
@@ -857,9 +871,9 @@ const CashFlow = () => {
                                         height={280}
                                         yAxis={
                                             <View style={{ height: '100%', justifyContent: 'space-between', paddingRight: 10 }}>
-                                                {yAxisLabels.reverse().map((label, index) => (
+                                                {generateYAxisLabels(cashFlowData).reverse().map((label, index) => (
                                                     <Text key={index} style={{ fontSize: 10, color: COLORS.textSecondary }}>
-                                                        {label}
+                                                        KSH {label}
                                                     </Text>
                                                 ))}
                                             </View>
@@ -872,46 +886,24 @@ const CashFlow = () => {
                                         }
                                     >
                                         {selectedChart === 'line' ? (
-                                            <>
-                                                <LineChart
-                                                    data={netCashFlowData}
-                                                    width={Math.max(screenWidth * 1.2, 400)}
-                                                    height={220}
-                                                    chartConfig={chartConfig}
-                                                    bezier
-                                                    style={CashFlowStyles.chart}
-                                                    withVerticalLabels={true}
-                                                    withHorizontalLabels={false}
-                                                    withInnerLines={true}
-                                                    withOuterLines={true}
-                                                    withDots={true}
-                                                    withShadow={false}
-                                                    segments={5}
-                                                    decorator={chartConfig.decorator}
-                                                    formatXLabel={chartConfig.formatXLabel}
-                                                    rotateLabels={chartConfig.rotateLabels}
-                                                />
-                                                <DataPointTooltip {...tooltipData} />
-                                            </>
+                                            renderLineChart(
+                                                netCashFlowData,
+                                                chartConfig,
+                                                Math.max(screenWidth * 1.2, 400),
+                                                220,
+                                                selectedPeriod
+                                            )
                                         ) : (
-                                            <>
-                                                <BarChart
-                                                    data={netCashFlowData}
-                                                    width={Math.max(screenWidth * 1.2, 400)}
-                                                    height={220}
-                                                    chartConfig={chartConfig}
-                                                    style={CashFlowStyles.chart}
-                                                    withVerticalLabels={true}
-                                                    withHorizontalLabels={false}
-                                                    segments={5}
-                                                    decorator={chartConfig.decorator}
-                                                    formatXLabel={chartConfig.formatXLabel}
-                                                    rotateLabels={chartConfig.rotateLabels}
-                                                />
-                                                <DataPointTooltip {...tooltipData} />
-                                            </>
+                                            renderBarChart(
+                                                netCashFlowData,
+                                                chartConfig,
+                                                Math.max(screenWidth * 1.2, 400),
+                                                220,
+                                                selectedPeriod
+                                            )
                                         )}
                                     </ScrollableChart>
+                                    <Text style={CashFlowStyles.currencyNote}>All figures are in Kenyan Shillings (KSH)</Text>
                                 </View>
 
                                 {/* Inflows/Outflows Chart */}
@@ -925,15 +917,17 @@ const CashFlow = () => {
                                             <HelpCircle color={COLORS.primary} size={20} />
                                         </TouchableOpacity>
                                     </View>
-                                    <ScrollableChart height={280} yAxis={
-                                        <View style={{ height: '100%', justifyContent: 'space-between', paddingRight: 10 }}>
-                                            {yAxisLabels.reverse().map((label, index) => (
-                                                <Text key={index} style={{ fontSize: 10, color: COLORS.textSecondary }}>
-                                                    {label}
-                                                </Text>
-                                            ))}
-                                        </View>
-                                    }
+                                    <ScrollableChart
+                                        height={280}
+                                        yAxis={
+                                            <View style={{ height: '100%', justifyContent: 'space-between', paddingRight: 10 }}>
+                                                {generateYAxisLabels(cashFlowData).reverse().map((label, index) => (
+                                                    <Text key={index} style={{ fontSize: 10, color: COLORS.textSecondary }}>
+                                                        KSH {label}
+                                                    </Text>
+                                                ))}
+                                            </View>
+                                        }
                                         legend={
                                             <ChartLegend
                                                 datasets={['Inflows', 'Outflows']}
@@ -942,46 +936,24 @@ const CashFlow = () => {
                                         }
                                     >
                                         {selectedChart === 'line' ? (
-                                            <>
-                                                <LineChart
-                                                    data={inflowOutflowData}
-                                                    width={Math.max(screenWidth * 1.2, 400)}
-                                                    height={220}
-                                                    chartConfig={chartConfig}
-                                                    bezier
-                                                    style={CashFlowStyles.chart}
-                                                    withVerticalLabels={true}
-                                                    withHorizontalLabels={false}
-                                                    withInnerLines={true}
-                                                    withOuterLines={true}
-                                                    withDots={true}
-                                                    withShadow={false}
-                                                    segments={5}
-                                                    decorator={chartConfig.decorator}
-                                                    formatXLabel={chartConfig.formatXLabel}
-                                                    rotateLabels={chartConfig.rotateLabels}
-                                                />
-                                                <DataPointTooltip {...tooltipData} />
-                                            </>
+                                            renderLineChart(
+                                                inflowOutflowData,
+                                                chartConfig,
+                                                Math.max(screenWidth * 1.2, 400),
+                                                220,
+                                                selectedPeriod
+                                            )
                                         ) : (
-                                            <>
-                                                <BarChart
-                                                    data={netCashFlowData}
-                                                    width={Math.max(screenWidth * 1.2, 400)}
-                                                    height={220}
-                                                    chartConfig={chartConfig}
-                                                    style={CashFlowStyles.chart}
-                                                    withVerticalLabels={true}
-                                                    withHorizontalLabels={false}
-                                                    segments={5}
-                                                    decorator={chartConfig.decorator}
-                                                    formatXLabel={chartConfig.formatXLabel}
-                                                    rotateLabels={chartConfig.rotateLabels}
-                                                />
-                                                <DataPointTooltip {...tooltipData} />
-                                            </>
+                                            renderBarChart(
+                                                inflowOutflowData,
+                                                chartConfig,
+                                                Math.max(screenWidth * 1.2, 400),
+                                                220,
+                                                selectedPeriod
+                                            )
                                         )}
                                     </ScrollableChart>
+                                    <Text style={CashFlowStyles.currencyNote}>All figures are in Kenyan Shillings (KSH)</Text>
                                 </View>
 
                                 {/* Forecast Button */}

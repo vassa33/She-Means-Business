@@ -4,7 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import SidebarLayout from './SidebarLayout';
 import HeaderLayout from './HeaderLayout';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 
 const ScreenLayout = ({ children, headerProps }) => {
     const { profileData } = useAppContext();

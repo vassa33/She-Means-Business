@@ -9,7 +9,7 @@ import {
     StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import dashboardStyles from '../styles/DashboardStyles';
@@ -36,8 +36,8 @@ const Dashboard = ({ navigation }) => {
             title: 'Quick Actions',
             content: [
                 { label: 'Record Sale', target: 'TransactionLog' },
-                { label: 'Add Expense', target: 'TransactionLog' },
-                { label: 'Set Reminder', target: 'ActionCenter' }
+                { label: 'Set Budget', target: 'BudgetTracker' },
+                { label: 'Add Expense', target: 'TransactionLog' }
             ],
             icon: 'flash-outline',
             type: 'actions'
@@ -67,7 +67,7 @@ const Dashboard = ({ navigation }) => {
     // Upcoming activities and deadlines
     const upcomingItems = [
         {
-            title: 'Tax Payment Due',
+            title: 'Review Q4 Budget',
             date: '2024-11-15',
             type: 'deadline'
         },

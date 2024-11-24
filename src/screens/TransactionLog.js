@@ -7,14 +7,19 @@ import {
     Modal,
     FlatList,
     SafeAreaView,
+    ScrollView,
     StatusBar,
     Switch,
     Alert
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { useAppContext } from '../context/AppContext';
+import { format } from 'date-fns';
+import { useAppContext } from '../contexts/AppContext';
+import { useInternalData } from '../contexts/InternalDataContext';
 import ScreenLayout from '../layouts/ScreenLayout';
+import budgetTrackerstyles from '../styles/BudgetTrackerStyles';
 import transactionLogStyles from '../styles/TransactionLogStyles';
 
 const SearchBar = ({ searchQuery, setSearchQuery }) => (
@@ -29,43 +34,53 @@ const SearchBar = ({ searchQuery, setSearchQuery }) => (
     </View>
 );
 
-const TransactionItem = ({ transaction, onEdit, onDelete }) => (
-    <View style={transactionLogStyles.transactionItem}>
-        <View style={[
-            transactionLogStyles.transactionBorder,
-            { borderLeftColor: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
-        ]} />
-        <View style={transactionLogStyles.transactionInfo}>
-            <Text style={transactionLogStyles.transactionDate}>{transaction.date}</Text>
-            <Text style={transactionLogStyles.transactionDescription}>{transaction.description}</Text>
-            <Text style={transactionLogStyles.transactionCategory}>{transaction.category}</Text>
-        </View>
-        <View style={transactionLogStyles.rightContainer}>
-            <Text style={[
-                transactionLogStyles.transactionAmountText,
-                { color: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
-            ]}>
-                {transaction.type === 'income' ? '+' : '-'} Ksh {Math.abs(transaction.amount).toLocaleString()}
-            </Text>
-            <View style={transactionLogStyles.actionButtons}>
-                <TouchableOpacity
-                    style={transactionLogStyles.actionButton}
-                    onPress={() => onEdit(transaction)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Ionicons name="pencil" size={20} color="#007AFF" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={transactionLogStyles.actionButton}
-                    onPress={() => onDelete(transaction)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Ionicons name="trash" size={20} color="#FF0000" />
-                </TouchableOpacity>
+const TransactionItem = ({ transaction, onEdit, onDelete }) => {
+    const formattedDate = format(transaction.date, 'dd MMM yyyy');
+
+    return (
+        <View style={transactionLogStyles.transactionItem}>
+            <View style={[
+                transactionLogStyles.transactionBorder,
+                { borderLeftColor: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
+            ]} />
+            <View style={transactionLogStyles.transactionInfo}>
+                <Text style={transactionLogStyles.transactionDate}>{formattedDate}</Text>
+                <Text style={transactionLogStyles.transactionDescription}>{transaction.description}</Text>
+                <Text style={transactionLogStyles.transactionCategory}>{transaction.category}</Text>
+                {transaction.savingsAllocation && (
+                    <Text style={transactionLogStyles.savingsAllocation}>
+                        Savings: Ksh {transaction.savingsAllocation.amount.toLocaleString()}
+                        ({transaction.savingsAllocation.goalName})
+                    </Text>
+                )}
+            </View>
+            <View style={transactionLogStyles.rightContainer}>
+                <Text style={[
+                    transactionLogStyles.transactionAmountText,
+                    { color: transaction.type === 'income' ? '#007AFF' : '#FF0000' }
+                ]}>
+                    {transaction.type === 'income' ? '+' : '-'} Ksh {Math.abs(transaction.amount).toLocaleString()}
+                </Text>
+                <View style={transactionLogStyles.actionButtons}>
+                    <TouchableOpacity
+                        style={transactionLogStyles.actionButton}
+                        onPress={() => onEdit(transaction)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="pencil" size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={transactionLogStyles.actionButton}
+                        onPress={() => onDelete(transaction)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="trash" size={20} color="#FF0000" />
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
-    </View>
-);
+    );
+};
 
 const TransactionModal = ({
     visible,
@@ -74,116 +89,267 @@ const TransactionModal = ({
     onSubmit,
     onClose,
     isEditing,
-    expenseCategories
-}) => (
-    <Modal
-        animationType="slide"
-        transparent={true}
-        visible={visible}
-        onRequestClose={onClose}
-    >
-        <View style={transactionLogStyles.modalOverlay}>
-            <View style={transactionLogStyles.modalView}>
-                <Text style={transactionLogStyles.modalTitle}>
-                    {isEditing ? 'Edit Transaction' : 'Add New Transaction'}
-                </Text>
-                <TextInput
-                    style={transactionLogStyles.input}
-                    placeholder="Date (YYYY-MM-DD)"
-                    value={transaction.date}
-                    onChangeText={(text) => setTransaction({ ...transaction, date: text })}
-                />
-                <TextInput
-                    style={transactionLogStyles.input}
-                    placeholder="Description"
-                    value={transaction.description}
-                    onChangeText={(text) => setTransaction({ ...transaction, description: text })}
-                />
-                <TextInput
-                    style={transactionLogStyles.input}
-                    placeholder="Amount"
-                    keyboardType="numeric"
-                    value={transaction.amount}
-                    onChangeText={(text) => setTransaction({ ...transaction, amount: text })}
-                />
-                <View style={transactionLogStyles.typeSelection}>
-                    <TouchableOpacity
-                        style={[
-                            transactionLogStyles.typeButton,
-                            transaction.type === 'expense' && transactionLogStyles.selectedType
-                        ]}
-                        onPress={() => setTransaction({ ...transaction, type: 'expense', category: '' })}
-                    >
-                        <Text style={transaction.type === 'expense' ? transactionLogStyles.selectedTypeText : null}>
-                            Expense
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[
-                            transactionLogStyles.typeButton,
-                            transaction.type === 'income' && transactionLogStyles.selectedType
-                        ]}
-                        onPress={() => setTransaction({ ...transaction, type: 'income', category: '' })}
-                    >
-                        <Text style={transaction.type === 'income' ? transactionLogStyles.selectedTypeText : null}>
-                            Income
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-                {transaction.type === 'expense' ? (
-                    <Picker
-                        selectedValue={transaction.category}
-                        style={transactionLogStyles.input}
-                        onValueChange={(itemValue) => setTransaction({ ...transaction, category: itemValue })}
-                    >
-                        <Picker.Item label="Select a category" value="" />
-                        {expenseCategories.map((category) => (
-                            <Picker.Item key={category} label={category} value={category} />
-                        ))}
-                    </Picker>
-                ) : (
-                    <TextInput
-                        style={transactionLogStyles.input}
-                        placeholder="Income Category"
-                        value={transaction.category}
-                        onChangeText={(text) => setTransaction({ ...transaction, category: text })}
+    budgetCategories,
+    incomeCategories,
+    savingsGoals
+}) => {
+    const [showSavingsAllocation, setShowSavingsAllocation] = useState(false);
+    const [savingsAmount, setSavingsAmount] = useState('');
+    const [selectedSavingsGoal, setSelectedSavingsGoal] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+
+    useEffect(() => {
+        if (transaction.type === 'income') {
+            setShowSavingsAllocation(!!transaction.savingsAllocation);
+            setSavingsAmount(transaction.savingsAllocation?.amount?.toString() || '');
+            setSelectedSavingsGoal(transaction.savingsAllocation?.goalId || '');
+        }
+    }, [transaction]);
+
+    const formatDate = (date) => {
+        return date ? date.toISOString().split('T')[0] : 'Select Date';
+    };
+
+    const handleSubmit = () => {
+        let finalTransaction = { ...transaction };
+
+        if (transaction.type === 'income' && showSavingsAllocation) {
+            const savingsAmountNum = Number(savingsAmount);
+            if (savingsAmountNum > Number(transaction.amount)) {
+                Alert.alert('Invalid Input', 'Savings amount cannot exceed transaction amount');
+                return;
+            }
+
+            if (savingsAmountNum > 0 && !selectedSavingsGoal) {
+                Alert.alert('Invalid Input', 'Please select a savings goal');
+                return;
+            }
+
+            if (savingsAmountNum > 0 && selectedSavingsGoal) {
+                const selectedGoal = savingsGoals.find(goal => goal.id === selectedSavingsGoal);
+                finalTransaction.savingsAllocation = {
+                    amount: savingsAmountNum,
+                    goalId: selectedSavingsGoal,
+                    goalName: selectedGoal.name
+                };
+            }
+        }
+
+        onSubmit(finalTransaction);
+    };
+
+    const StyledCategoryPicker = ({ label, selectedValue, onValueChange, items }) => (
+        <View style={transactionLogStyles.pickerContainer}>
+            <View style={transactionLogStyles.pickerWrapper}>
+                <Picker
+                    selectedValue={selectedValue}
+                    onValueChange={onValueChange}
+                    style={transactionLogStyles.picker}
+                    dropdownIconColor="#666"
+                >
+                    <Picker.Item
+                        label={label}
+                        value=""
+                        style={transactionLogStyles.placeholderItem}
+                        enabled={false}
                     />
-                )}
-                <View style={transactionLogStyles.buttonContainer}>
-                    <TouchableOpacity style={transactionLogStyles.addButton} onPress={onSubmit}>
-                        <Text style={transactionLogStyles.addButtonText}>{isEditing ? 'Update' : 'Add'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={transactionLogStyles.cancelButton} onPress={onClose}>
-                        <Text style={transactionLogStyles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-                </View>
+                    {items.map((item) => (
+                        <Picker.Item
+                            key={item.id}
+                            label={item.name}
+                            value={item.id}
+                            style={transactionLogStyles.pickerItem}
+                        />
+                    ))}
+                </Picker>
             </View>
         </View>
-    </Modal>
-);
+    );
+
+    return (
+        <Modal
+            animationType="slide"
+            transparent={true}
+            visible={visible}
+            onRequestClose={onClose}
+        >
+            <View style={transactionLogStyles.modalOverlay}>
+                <View style={transactionLogStyles.modalView}>
+                    <Text style={transactionLogStyles.modalTitle}>
+                        {isEditing ? 'Edit Transaction' : 'Add New Transaction'}
+                    </Text>
+                    <View style={transactionLogStyles.datePickerContainer}>
+                        <TouchableOpacity
+                            style={[
+                                transactionLogStyles.dateButton,
+                                showDatePicker && transactionLogStyles.dateButtonFocused
+                            ]}
+                            onPress={() => setShowDatePicker(true)}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={20}
+                                    color="#666"
+                                    style={transactionLogStyles.dateButtonIcon}
+                                />
+                                <Text style={transactionLogStyles.dateButtonText}>
+                                    Date: {formatDate(transaction.date)}
+                                </Text>
+                            </View>
+                            <Ionicons name="chevron-down-outline" size={20} color="#666" />
+                        </TouchableOpacity>
+
+                        {showDatePicker && (
+                            <DateTimePicker
+                                value={transaction.date || new Date()}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                    setShowDatePicker(false);
+                                    if (selectedDate && event.type !== 'dismissed') {
+                                        setTransaction({ ...transaction, date: selectedDate });
+                                    }
+                                }}
+                            />
+                        )}
+                    </View>
+
+                    <TextInput
+                        style={transactionLogStyles.input}
+                        placeholder="Description"
+                        value={transaction.description}
+                        onChangeText={(text) => setTransaction({ ...transaction, description: text })}
+                    />
+                    <TextInput
+                        style={transactionLogStyles.input}
+                        placeholder="Amount"
+                        keyboardType="numeric"
+                        value={transaction.amount}
+                        onChangeText={(text) => setTransaction({ ...transaction, amount: text })}
+                    />
+                    <View style={transactionLogStyles.typeSelection}>
+                        <TouchableOpacity
+                            style={[
+                                transactionLogStyles.typeButton,
+                                transaction.type === 'expense' && transactionLogStyles.selectedType
+                            ]}
+                            onPress={() => {
+                                setTransaction({ ...transaction, type: 'expense', category: '' });
+                                setShowSavingsAllocation(false);
+                            }}
+                        >
+                            <Text style={transaction.type === 'expense' ? transactionLogStyles.selectedTypeText : null}>
+                                Expense
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                transactionLogStyles.typeButton,
+                                transaction.type === 'income' && transactionLogStyles.selectedType
+                            ]}
+                            onPress={() => setTransaction({ ...transaction, type: 'income', category: '' })}
+                        >
+                            <Text style={transaction.type === 'income' ? transactionLogStyles.selectedTypeText : null}>
+                                Income
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {transaction.type === 'expense' ? (
+                        <StyledCategoryPicker
+                            label="Select Expense category"
+                            selectedValue={transaction.category}
+                            onValueChange={(itemValue) => setTransaction({ ...transaction, category: itemValue })}
+                            items={budgetCategories}
+                        />
+                    ) : (
+                        <>
+                            <StyledCategoryPicker
+                                label="Select Income category"
+                                selectedValue={transaction.category}
+                                onValueChange={(itemValue) => setTransaction({ ...transaction, category: itemValue })}
+                                items={incomeCategories}
+                            />
+
+                            <View style={transactionLogStyles.savingsContainer}>
+                                <View style={transactionLogStyles.savingsToggle}>
+                                    <Text>Allocate to Savings?</Text>
+                                    <Switch
+                                        value={showSavingsAllocation}
+                                        onValueChange={setShowSavingsAllocation}
+                                        trackColor={{ false: '#E0E0E0', true: '#81B0FF' }}
+                                        thumbColor={showSavingsAllocation ? '#007AFF' : '#f4f3f4'}
+                                    />
+                                </View>
+
+                                {showSavingsAllocation && (
+                                    <>
+                                        <TextInput
+                                            style={transactionLogStyles.input}
+                                            placeholder="Savings Amount"
+                                            keyboardType="numeric"
+                                            value={savingsAmount}
+                                            onChangeText={setSavingsAmount}
+                                        />
+                                        <StyledCategoryPicker
+                                            label="Select Savings goal"
+                                            selectedValue={selectedSavingsGoal}
+                                            onValueChange={setSelectedSavingsGoal}
+                                            items={savingsGoals}
+                                        />
+                                    </>
+                                )}
+                            </View>
+                        </>
+                    )}
+
+                    <View style={transactionLogStyles.buttonContainer}>
+                        <TouchableOpacity
+                            style={transactionLogStyles.addButton}
+                            onPress={handleSubmit}
+                        >
+                            <Text style={transactionLogStyles.addButtonText}>
+                                {isEditing ? 'Update' : 'Add'}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={transactionLogStyles.cancelButton}
+                            onPress={onClose}
+                        >
+                            <Text style={transactionLogStyles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+};
 
 const TransactionLog = () => {
     const { setCurrentScreen } = useAppContext();
+    const {
+        transactions,
+        addTransaction,
+        updateTransaction,
+        deleteTransaction,
+        budgetData,
+        savingsGoals,
+        getMonthKey,
+        updateBudgetAmount,
+    } = useInternalData();
+
 
     // State management
-    const [transactions, setTransactions] = useState([
-        { id: '1', date: '2023-10-14', description: 'Sale of products', amount: 5000, type: 'income', category: 'Sales' },
-        { id: '2', date: '2023-10-13', description: 'Purchase of materials', amount: -2000, type: 'expense', category: 'Inventory' },
-        { id: '3', date: '2023-10-12', description: 'Utility bill', amount: -500, type: 'expense', category: 'Utilities' },
-        { id: '4', date: '2023-10-11', description: 'Rent payment', amount: -3000, type: 'expense', category: 'Rent' },
-        { id: '5', date: '2023-10-10', description: 'Salary for employees', amount: -15000, type: 'expense', category: 'Salaries' },
-        { id: '6', date: '2023-10-09', description: 'Online ad campaign', amount: -1000, type: 'expense', category: 'Marketing' },
-        { id: '7', date: '2023-10-08', description: 'Cash deposit', amount: 10000, type: 'income', category: 'Sales' },
-        { id: '8', date: '2023-10-07', description: 'Office supplies', amount: -500, type: 'expense', category: 'Not Budgeted' },
-    ]);
     const [filteredTransactions, setFilteredTransactions] = useState([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showIncomeToggle, setShowIncomeToggle] = useState(true);
     const [showExpenseToggle, setShowExpenseToggle] = useState(true);
     const [editingTransaction, setEditingTransaction] = useState(null);
+    const [currentDate, setCurrentDate] = useState(new Date());
     const [newTransaction, setNewTransaction] = useState({
-        date: '',
+        date: new Date(),
         description: '',
         amount: '',
         type: 'expense',
@@ -191,20 +357,34 @@ const TransactionLog = () => {
     });
     const [showLogTooltip, setShowLogTooltip] = useState(false);
 
+    // Get current month's budget categories
+    const currentMonthKey = getMonthKey(currentDate);
+    const budgetCategories = budgetData.monthlyBudgets[currentMonthKey]?.categories.map(category => ({
+        ...category,
+        name: category.name || 'Uncategorized'
+    })) || [];
 
-    const expenseCategories = [
-        'Inventory',
-        'Utilities',
-        'Rent',
-        'Salaries',
-        'Marketing',
-        'Not Budgeted'
+    // Predefined categories for consistent reporting
+    const incomeCategories = [
+        { id: 'store_sales', name: 'Store Sales' },
+        { id: 'social_media_sales', name: 'Social Media Sales' },
+        { id: 'investments', name: 'Investments' },
+        { id: 'website_sales', name: 'Website Sales' },
+        { id: 'discount_sales', name: 'Discount Sales' },
+        { id: 'affiliate_marketing', name: 'Affiliate Marketing Sales' },
+        { id: 'other_income', name: 'Other Income' }
     ];
+
+    // Format savings goals for display
+    const formattedSavingsGoals = savingsGoals.map(goal => ({
+        ...goal,
+        name: goal.name || 'Unnamed Goal'
+    }));
 
     useEffect(() => {
         setCurrentScreen('Transaction Log');
-        setFilteredTransactions(transactions);
     }, []);
+
 
     useEffect(() => {
         if (editingTransaction) {
@@ -213,41 +393,93 @@ const TransactionLog = () => {
                 description: editingTransaction.description,
                 amount: Math.abs(editingTransaction.amount).toString(),
                 type: editingTransaction.type,
-                category: editingTransaction.category
+                category: editingTransaction.category,
+                savingsAllocation: editingTransaction.savingsAllocation
             });
             setModalVisible(true);
         }
     }, [editingTransaction]);
 
+
+    // Filter transactions based on current month, search query, and type toggles
     useEffect(() => {
         const filtered = transactions.filter(transaction => {
-            const matchesSearch = transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                transaction.category.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesType = (showIncomeToggle && transaction.type === 'income') ||
-                (showExpenseToggle && transaction.type === 'expense');
-            return matchesSearch && matchesType;
-        });
-        setFilteredTransactions(filtered);
-    }, [searchQuery, showIncomeToggle, showExpenseToggle, transactions]);
+            const transactionDate = new Date(transaction.date);
+            const isCurrentMonth =
+                transactionDate.getMonth() === currentDate.getMonth() &&
+                transactionDate.getFullYear() === currentDate.getFullYear();
 
-    const handleAddTransaction = () => {
-        if (newTransaction.date && newTransaction.description && newTransaction.amount && newTransaction.category) {
-            const transactionToAdd = {
+            const matchesSearch =
+                transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                getCategoryName(transaction).toLowerCase().includes(searchQuery.toLowerCase());
+
+            const matchesType =
+                (showIncomeToggle && transaction.type === 'income') ||
+                (showExpenseToggle && transaction.type === 'expense');
+
+            return isCurrentMonth && matchesSearch && matchesType;
+        });
+
+        // Sort transactions by date (newest first)
+        const sortedTransactions = filtered.sort((a, b) =>
+            new Date(b.date) - new Date(a.date)
+        );
+
+        setFilteredTransactions(sortedTransactions);
+    }, [searchQuery, showIncomeToggle, showExpenseToggle, transactions, currentDate]);
+
+    // Helper function to get category name
+    const getCategoryName = (transaction) => {
+        if (transaction.type === 'expense') {
+            const category = budgetCategories.find(cat => cat.id === transaction.category);
+            return category?.name || 'Uncategorized';
+        } else {
+            const category = incomeCategories.find(cat => cat.id === transaction.category);
+            return category?.name || 'Uncategorized';
+        }
+    };
+
+    // Handle transaction updates (new and edit)
+    const handleAddTransaction = (transactionData) => {
+        if (transactionData.date && transactionData.description && transactionData.amount && transactionData.category) {
+            const amount = Number(transactionData.amount);
+            const monthKey = getMonthKey(new Date(transactionData.date));
+
+            const newTransactionObj = {
                 id: editingTransaction?.id || Date.now().toString(),
-                ...newTransaction,
-                amount: newTransaction.type === 'expense' ? -Number(newTransaction.amount) : Number(newTransaction.amount)
+                ...transactionData,
+                amount: transactionData.type === 'expense' ? -amount : amount,
+                timestamp: new Date().toISOString()
             };
 
-            setTransactions(prev =>
-                editingTransaction
-                    ? prev.map(t => t.id === editingTransaction.id ? transactionToAdd : t)
-                    : [...prev, transactionToAdd]
-            );
+            // If editing, first reverse the effects of the old transaction
+            if (editingTransaction) {
+                if (editingTransaction.type === 'expense') {
+                    const oldMonthKey = getMonthKey(new Date(editingTransaction.date));
+                    const oldAmount = Math.abs(editingTransaction.amount);
+                    // Reverse the old transaction's effect
+                    updateBudgetAmount(editingTransaction.category, -oldAmount, oldMonthKey);
+                }
+
+                // Apply the new transaction
+                if (transactionData.type === 'expense') {
+                    updateBudgetAmount(transactionData.category, amount, monthKey);
+                }
+
+                // Update the transaction
+                updateTransaction(editingTransaction.id, newTransactionObj);
+            } else {
+                // Add new transaction and update budget if it's an expense
+                addTransaction(newTransactionObj);
+                if (transactionData.type === 'expense') {
+                    updateBudgetAmount(transactionData.category, amount, monthKey);
+                }
+            }
 
             setModalVisible(false);
             setEditingTransaction(null);
             setNewTransaction({
-                date: '',
+                date: new Date(),
                 description: '',
                 amount: '',
                 type: 'expense',
@@ -258,6 +490,7 @@ const TransactionLog = () => {
         }
     };
 
+    // Handle transaction deletion
     const handleDeleteTransaction = (transaction) => {
         Alert.alert(
             'Delete Transaction',
@@ -265,14 +498,86 @@ const TransactionLog = () => {
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Delete', style: 'destructive', onPress: () => {
-                        setTransactions(prev => prev.filter(t => t.id !== transaction.id));
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        try {
+                            // Reverse the budget effect before deleting
+                            if (transaction.type === 'expense') {
+                                const monthKey = getMonthKey(new Date(transaction.date));
+                                updateBudgetAmount(
+                                    transaction.category,
+                                    -Math.abs(transaction.amount),
+                                    monthKey
+                                );
+                            }
+                            deleteTransaction(transaction.id);
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete transaction');
+                        }
                     }
                 }
             ],
             { cancelable: true }
         );
     };
+
+    // Month Navigation Functions
+    const formatMonthYear = (date) => {
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    };
+
+    const goToPreviousMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() - 1);
+            return newDate;
+        });
+    };
+
+    const goToNextMonth = () => {
+        setCurrentDate(prevDate => {
+            const newDate = new Date(prevDate);
+            newDate.setMonth(prevDate.getMonth() + 1);
+            return newDate;
+        });
+    };
+
+    // Month on Month View
+    const MonthNavigation = () => (
+        <View style={budgetTrackerstyles.monthNavigationContainer}>
+            <TouchableOpacity
+                onPress={goToPreviousMonth}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+            </TouchableOpacity>
+
+            <Text style={budgetTrackerstyles.currentMonthText}>
+                {formatMonthYear(currentDate)}
+            </Text>
+
+            <TouchableOpacity
+                onPress={goToNextMonth}
+                style={budgetTrackerstyles.monthNavigationButton}
+            >
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
+            </TouchableOpacity>
+        </View>
+    );
+
+    // Render transaction item with category name
+    const renderTransactionItem = (transaction) => (
+        <TransactionItem
+            key={transaction.id}
+            transaction={{
+                ...transaction,
+                category: getCategoryName(transaction)
+            }}
+            onEdit={() => setEditingTransaction(transaction)}
+            onDelete={() => handleDeleteTransaction(transaction)}
+        />
+    );
 
     const screenHeaderProps = {
         title: "Transaction Log",
@@ -307,6 +612,7 @@ Regular transaction logging helps you make data-driven decisions for business gr
             />
             <ScreenLayout headerProps={screenHeaderProps}>
                 <View style={transactionLogStyles.contentContainer}>
+                    <MonthNavigation />
                     <SearchBar
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
@@ -334,21 +640,9 @@ Regular transaction logging helps you make data-driven decisions for business gr
                         </View>
                     </View>
 
-                    <View style={transactionLogStyles.listContainer}>
-                        <FlatList
-                            data={filteredTransactions}
-                            renderItem={({ item }) => (
-                                <TransactionItem
-                                    transaction={item}
-                                    onEdit={setEditingTransaction}
-                                    onDelete={handleDeleteTransaction}
-                                />
-                            )}
-                            keyExtractor={item => item.id}
-                            style={transactionLogStyles.list}
-                            contentContainerStyle={transactionLogStyles.listContent}
-                        />
-                    </View>
+                    <ScrollView style={transactionLogStyles.listContainer}>
+                        {filteredTransactions.map(renderTransactionItem)}
+                    </ScrollView>
 
                     <View style={transactionLogStyles.bottomContainer}>
                         <TouchableOpacity
@@ -356,7 +650,7 @@ Regular transaction logging helps you make data-driven decisions for business gr
                             onPress={() => {
                                 setEditingTransaction(null);
                                 setNewTransaction({
-                                    date: '',
+                                    date: new Date(),
                                     description: '',
                                     amount: '',
                                     type: 'expense',
@@ -372,14 +666,14 @@ Regular transaction logging helps you make data-driven decisions for business gr
 
                     <TransactionModal
                         visible={modalVisible}
-                        transaction={newTransaction}
+                        transaction={editingTransaction || newTransaction}
                         setTransaction={setNewTransaction}
                         onSubmit={handleAddTransaction}
                         onClose={() => {
                             setModalVisible(false);
                             setEditingTransaction(null);
                             setNewTransaction({
-                                date: '',
+                                date: new Date(),
                                 description: '',
                                 amount: '',
                                 type: 'expense',
@@ -387,7 +681,9 @@ Regular transaction logging helps you make data-driven decisions for business gr
                             });
                         }}
                         isEditing={!!editingTransaction}
-                        expenseCategories={expenseCategories}
+                        budgetCategories={budgetCategories}
+                        incomeCategories={incomeCategories}
+                        savingsGoals={savingsGoals}
                     />
                 </View>
             </ScreenLayout>

@@ -34,6 +34,7 @@ const transactionLogStyles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         marginBottom: 16,
+        marginTop: 16,
     },
     searchInput: {
         // fontSize: 16,
@@ -42,6 +43,29 @@ const transactionLogStyles = StyleSheet.create({
     },
     searchIcon: {
         marginLeft: 6,
+    },
+    datePickerContainer: {
+        marginBottom: 15,
+    },
+    dateButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        backgroundColor: '#fff',
+    },
+    dateButtonFocused: {
+        borderColor: '#007AFF',
+    },
+    dateButtonIcon: {
+        marginRight: 8,
+    },
+    dateButtonText: {
+        fontSize: 16,
+        color: '#333',
     },
     toggleContainer: {
         flexDirection: 'row',
@@ -84,7 +108,6 @@ const transactionLogStyles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 3.84,
     },
-
     transactionInfo: {
         flex: 1,
         marginLeft: 12,
@@ -205,6 +228,30 @@ const transactionLogStyles = StyleSheet.create({
         paddingHorizontal: 12,
         fontSize: 16,
         color: '#000000',
+    },
+    pickerContainer: {
+        marginVertical: 10,
+    },
+    pickerWrapper: {
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        backgroundColor: '#fff',
+        overflow: 'hidden',
+    },
+    picker: {
+        height: 50,
+        width: '100%',
+        backgroundColor: 'transparent',
+        color: '#333',
+    },
+    pickerItem: {
+        fontSize: 16,
+        color: '#333',
+    },
+    placeholderItem: {
+        fontSize: 16,
+        color: '#999',
     },
     typeSelection: {
         flexDirection: 'row',

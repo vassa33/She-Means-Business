@@ -5,8 +5,8 @@ const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
     const [profileData, setProfileData] = useState({
-        name: 'Lady Pam ✨',
-        business: 'Vee Studios',
+        name: 'Koko Njoroge ✨',
+        business: 'Koko Designs',
         phone: '+254 794 552 223',
         profilePic: null,
     });

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import {
     View,
     Text,
@@ -16,48 +16,168 @@ import ScreenLayout from '../layouts/ScreenLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
 import savingsTrackerStyles from '../styles/SavingsTrackerStyles';
+import { useInternalData } from '../contexts/InternalDataContext';
 
 const CHART_COLORS = [
-    '#4E79A7', // Steel Blue
-    '#F28E2B', // Sunset Orange
-    '#E15759', // Terra Cotta
-    '#76B7B2', // Teal
-    '#59A14F', // Moss Green
-    '#EDC948', // Goldenrod
-    '#B07AA1', // Lavender Purple
-    '#FF9DA7', // Rose Pink
-    '#9C755F', // Taupe
-    '#BAB0AC', // Silver
+    '#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F',
+    '#EDC948', '#B07AA1', '#FF9DA7', '#9C755F', '#BAB0AC'
 ];
 
-
 const SavingsTracker = () => {
+    // Context Integration
+    const {
+        savingsGoals,
+        addSavingsGoal,
+        updateSavingsGoal,
+        deleteSavingsGoal,
+        financialMetrics,
+    } = useInternalData();
+
+    // Local State
     const [modalVisible, setModalVisible] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
-    const [newGoal, setNewGoal] = useState({ name: '', target: '' });
+    const [newGoal, setNewGoal] = useState({ name: '', targetAmount: '' });
     const [editingGoal, setEditingGoal] = useState(null);
+    const [showLogTooltip, setShowLogTooltip] = useState(false);
     const [showChart, setShowChart] = useState(false);
     const [showPercentages, setShowPercentages] = useState(false);
-    const [showLogTooltip, setShowLogTooltip] = useState(false);
-    const [chartViewIndex, setChartViewIndex] = useState(0); // 0 for saved, 1 for target
+    const [chartViewIndex, setChartViewIndex] = useState(0);
     const screenWidth = Dimensions.get('window').width;
 
-    // Modified data structure to handle monthly savings
-    const getMonthKey = (date) => {
-        return `${date.getFullYear()}-${date.getMonth() + 1}`;
+    // Current Month Management
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Use financial metrics for enhanced data visualization
+    const savingsProgress = financialMetrics?.savingsProgress || [];
+    const currentMonthSavings = financialMetrics?.currentMonth?.income?.totalSaved || 0;
+    const savingsRate = financialMetrics?.currentMonth?.savingsRate || 0;
+
+    // Chart calculations using context data and financial metrics
+    const { totalSavings, totalTarget, chartData, percentageAllocations } = useMemo(() => {
+        const savingsProgress = financialMetrics?.savingsProgress || [];
+
+        const total = chartViewIndex === 0
+            ? savingsProgress.reduce((sum, goal) => sum + goal.saved, 0)
+            : savingsProgress.reduce((sum, goal) => sum + goal.targetAmount, 0);
+
+        const pieData = savingsProgress
+            .filter(goal => chartViewIndex === 0
+                ? goal.saved > 0
+                : goal.targetAmount > 0)
+            .map((goal, index) => {
+                const value = showPercentages
+                    ? (total > 0
+                        ? (chartViewIndex === 0
+                            ? (goal.saved / total) * 100
+                            : (goal.targetAmount / total) * 100)
+                        : 0)
+                    : (chartViewIndex === 0 ? goal.saved : goal.targetAmount);
+
+                return {
+                    name: goal.name,
+                    saved: goal.saved || 0,
+                    target: goal.targetAmount || 0,
+                    color: CHART_COLORS[index % CHART_COLORS.length],
+                    legendFontColor: '#7F7F7F',
+                    legendFontSize: 12,
+                    value: value
+                };
+            });
+
+        const allocations = savingsProgress
+            .filter(goal => goal.targetAmount > 0)
+            .map(goal => ({
+                name: goal.name,
+                percentage: total > 0
+                    ? ((chartViewIndex === 0
+                        ? goal.saved
+                        : goal.targetAmount) / total * 100).toFixed(1)
+                    : '0'
+            }));
+
+        return {
+            totalSavings: total,
+            totalTarget: total,
+            chartData: pieData,
+            percentageAllocations: allocations
+        };
+    }, [financialMetrics, showPercentages, chartViewIndex]);
+
+
+    // Modified handlers to use context
+    const handleAddGoal = () => {
+        if (!newGoal.name.trim()) {
+            Alert.alert('Missing Information', 'Please enter a goal name');
+            return;
+        }
+        if (!newGoal.targetAmount || isNaN(parseFloat(newGoal.targetAmount))) {
+            Alert.alert('Invalid Target', 'Please enter a valid target amount');
+            return;
+        }
+
+        addSavingsGoal({
+            name: newGoal.name.trim(),
+            targetAmount: parseFloat(newGoal.targetAmount),
+            currentAmount: 0,
+            description: newGoal.description || ''
+        });
+
+        setModalVisible(false);
+        setNewGoal({ name: '', targetAmount: '', description: '' });
+        Alert.alert("Goal Added", "Your new savings goal has been added successfully!");
     };
 
-    // Update the state to handle monthly data
-    const [savingsData, setSavingsData] = useState({
-        monthlyData: {
-            [getMonthKey(new Date())]: {
-                goals: []
-            }
-        }
-    });
+    const handleEditGoal = (goal) => {
+        setEditingGoal({
+            id: goal.id,
+            name: goal.name,
+            newName: goal.name, // Ensure newName exists
+            newTarget: goal.targetAmount,
+            newDescription: goal.description
+        });
+        setEditModalVisible(true);
+    };
 
-    // New state for month navigation
-    const [currentDate, setCurrentDate] = useState(new Date());
+    const handleUpdateGoal = () => {
+        if (!editingGoal) {
+            Alert.alert('Error', 'No goal selected for editing');
+            return;
+        }
+
+        const goalToUpdate = savingsGoals.find(goal => goal.id === editingGoal.id);
+
+        updateSavingsGoal(editingGoal.id, {
+            name: editingGoal.newName?.trim() || goalToUpdate.name,
+            targetAmount: parseFloat(editingGoal.newTarget) || goalToUpdate.targetAmount,
+            description: editingGoal.newDescription || goalToUpdate.description,
+            // Preserve the current saved amount
+            currentAmount: goalToUpdate.currentAmount
+        });
+
+        setEditModalVisible(false);
+        setEditingGoal(null);
+        Alert.alert("Goal Updated", "Your savings goal has been successfully updated!");
+    };
+
+    const handleDeleteGoal = () => {
+        Alert.alert(
+            "Delete Goal",
+            `Are you sure you want to delete "${editingGoal.name}"?`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => {
+                        deleteSavingsGoal(editingGoal.id);
+                        setEditModalVisible(false);
+                        setEditingGoal(null);
+                        Alert.alert("Goal Deleted", "The savings goal has been removed successfully.");
+                    }
+                }
+            ]
+        );
+    };
 
     // Function to format the current month and year
     const formatMonthYear = (date) => {
@@ -80,49 +200,6 @@ const SavingsTracker = () => {
             return newDate;
         });
     };
-
-    const currentMonthKey = getMonthKey(currentDate);
-
-    // Initialize monthly savings data if it doesn't exist
-    useEffect(() => {
-        if (!savingsData.monthlyData) {
-            // Initialize first month
-            setSavingsData({
-                ...savingsData,
-                monthlyData: {
-                    [currentMonthKey]: {
-                        goals: []
-                    }
-                }
-            });
-        } else if (!savingsData.monthlyData[currentMonthKey]) {
-            // Get goal names from any existing month
-            const existingMonths = Object.keys(savingsData.monthlyData);
-            const goalTemplates = existingMonths.length > 0
-                ? savingsData.monthlyData[existingMonths[0]].goals.map(goal => ({
-                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                    name: goal.name,
-                    target: 0, // Start with zero
-                    saved: 0
-                }))
-                : [];
-
-            setSavingsData({
-                ...savingsData,
-                monthlyData: {
-                    ...savingsData.monthlyData,
-                    [currentMonthKey]: {
-                        goals: goalTemplates
-                    }
-                }
-            });
-        }
-    }, [currentMonthKey]);
-
-    // Modified to use monthly goals
-    const currentGoals = useMemo(() => {
-        return savingsData.monthlyData?.[currentMonthKey]?.goals || [];
-    }, [savingsData.monthlyData, currentMonthKey]);
 
     // Add month navigation UI at the top
     const MonthNavigation = () => (
@@ -147,212 +224,14 @@ const SavingsTracker = () => {
         </View>
     );
 
-    // Chart data calculations with safety checks and monthly tracking
-    const { totalSavings, totalTarget, chartData, percentageAllocations } = useMemo(() => {
-        const currentGoals = savingsData.monthlyData[currentMonthKey]?.goals || [];
-
-        const total = currentGoals.reduce((sum, goal) => sum + (goal.saved || 0), 0);
-        const targetTotal = currentGoals.reduce((sum, goal) => sum + (goal.target || 0), 0);
-
-        // Only create chart data if we have valid numbers to show
-        const pieData = currentGoals
-            .filter(goal => {
-                // For target view, include goals with target > 0
-                // For saved view, include goals with saved > 0
-                return chartViewIndex === 0 ? goal.saved > 0 : goal.target > 0;
-            })
-            .map((goal, index) => {
-                const value = showPercentages
-                    ? (chartViewIndex === 0
-                        ? (total > 0 ? (goal.saved / total) * 100 : 0)
-                        : (targetTotal > 0 ? (goal.target / targetTotal) * 100 : 0))
-                    : (chartViewIndex === 0 ? goal.saved : goal.target);
-
-                return {
-                    name: goal.name,
-                    saved: goal.saved || 0,
-                    target: goal.target || 0,
-                    color: CHART_COLORS[index % CHART_COLORS.length],
-                    legendFontColor: '#7F7F7F',
-                    legendFontSize: 12,
-                    value: value
-                };
-            });
-
-        const allocations = currentGoals
-            .filter(goal => goal.target > 0)
-            .map(goal => ({
-                name: goal.name,
-                percentage: targetTotal > 0 ? ((goal.target / targetTotal) * 100).toFixed(1) : '0'
-            }));
-
-        return {
-            totalSavings: total,
-            totalTarget: targetTotal,
-            chartData: pieData,
-            percentageAllocations: allocations
-        };
-    }, [savingsData.monthlyData, currentMonthKey, showPercentages, chartViewIndex]);
-
-    const handleEditGoal = (goal) => {
-        setEditingGoal({
-            ...goal,
-            newName: goal.name,
-            newTarget: goal.target.toString(),
-            newSaved: goal.saved.toString()
-        });
-        setEditModalVisible(true);
-    };
-
-    const handleUpdateGoal = () => {
-        if (!editingGoal.newName.trim()) {
-            Alert.alert('Missing Information', 'Please enter a goal name');
-            return;
-        }
-        if (!editingGoal.newTarget || isNaN(parseFloat(editingGoal.newTarget))) {
-            Alert.alert('Invalid Target', 'Please enter a valid target amount');
-            return;
-        }
-        if (!editingGoal.newSaved || isNaN(parseFloat(editingGoal.newSaved))) {
-            Alert.alert('Invalid Amount', 'Please enter a valid saved amount');
-            return;
-        }
-
-        const updatedMonthlyData = { ...savingsData.monthlyData };
-        Object.keys(updatedMonthlyData).forEach(monthKey => {
-            updatedMonthlyData[monthKey].goals = updatedMonthlyData[monthKey].goals.map(goal => {
-                if (goal.id === editingGoal.id) {
-                    return {
-                        ...goal,
-                        name: editingGoal.newName.trim(),
-                        target: parseFloat(editingGoal.newTarget),
-                        // Only update saved amount for current month
-                        saved: monthKey === currentMonthKey
-                            ? parseFloat(editingGoal.newSaved)
-                            : goal.saved
-                    };
-                }
-                return goal;
-            });
-        });
-
-        setSavingsData({
-            ...savingsData,
-            monthlyData: updatedMonthlyData
-        });
-
-        setEditModalVisible(false);
-        setEditingGoal(null);
-
-        Alert.alert(
-            "Goal Updated",
-            "Your savings goal has been successfully updated!"
-        );
-    };
-
-    const handleDeleteGoal = () => {
-        Alert.alert(
-            "Delete Goal",
-            `Are you sure you want to delete "${editingGoal.name}"? This will remove this goal from all months.`,
-            [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => {
-                        // Remove goal from all months
-                        const updatedMonthlyData = Object.keys(savingsData.monthlyData).reduce((acc, monthKey) => {
-                            acc[monthKey] = {
-                                ...savingsData.monthlyData[monthKey],
-                                goals: savingsData.monthlyData[monthKey].goals
-                                    .filter(goal => goal.id !== editingGoal.id)
-                            };
-                            return acc;
-                        }, {});
-
-                        setSavingsData({
-                            ...savingsData,
-                            monthlyData: updatedMonthlyData
-                        });
-
-                        setEditModalVisible(false);
-                        setEditingGoal(null);
-                        Alert.alert(
-                            "Goal Deleted",
-                            "The savings goal has been removed successfully."
-                        );
-                    }
-                }
-            ]
-        );
-    };
-
-    const addSavingsGoal = () => {
-        if (!newGoal.name.trim()) {
-            Alert.alert('Missing Information', 'Please enter a goal name');
-            return;
-        }
-        if (!newGoal.target || isNaN(parseFloat(newGoal.target))) {
-            Alert.alert('Invalid Target', 'Please enter a valid target amount');
-            return;
-        }
-
-        // const newGoalItem = {
-        //     id: Date.now().toString(),
-        //     name: newGoal.name.trim(),
-        //     target: parseFloat(newGoal.target),
-        //     saved: 0,
-        // };
-        const target = parseFloat(newGoal.target);
-        const newGoalItem = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: newGoal.name.trim(),
-            target: target,
-            saved: 0,
-        };
-
-        // Add goal to all months with zero target except current month
-        const updatedMonthlyData = { ...savingsData.monthlyData };
-        Object.keys(updatedMonthlyData).forEach(monthKey => {
-            if (monthKey !== currentMonthKey) {
-                updatedMonthlyData[monthKey] = {
-                    ...updatedMonthlyData[monthKey],
-                    goals: [
-                        ...updatedMonthlyData[monthKey].goals,
-                        { ...newGoalItem, target: 0, saved: 0 }
-                    ]
-                };
-            }
-        });
-
-        // Add goal to current month with specified target
-        updatedMonthlyData[currentMonthKey] = {
-            ...updatedMonthlyData[currentMonthKey],
-            goals: [
-                ...(updatedMonthlyData[currentMonthKey]?.goals || []),
-                newGoalItem
-            ]
-        };
-
-        setSavingsData({
-            ...savingsData,
-            monthlyData: updatedMonthlyData
-        });
-
-        setModalVisible(false);
-        setNewGoal({ name: '', target: '', saved: 0 });
-
-        Alert.alert(
-            "Goal Added",
-            "Your new savings goal has been added successfully!"
-        );
-    };
-
+    // Render functions updated for new data structure
     const renderSavingsGoal = ({ item }) => {
-        const progressPercentage = (item.saved / item.target) * 100;
+        const progressInfo = (financialMetrics?.savingsProgress || [])
+            .find(progress => progress.id === item.id) || {
+            saved: 0,
+            percentage: 0
+        };
+
         return (
             <View style={savingsTrackerStyles.goalItem}>
                 <View style={savingsTrackerStyles.goalHeader}>
@@ -369,20 +248,20 @@ const SavingsTracker = () => {
                         style={[
                             savingsTrackerStyles.progressFill,
                             {
-                                width: `${Math.min(progressPercentage, 100)}%`,
-                                backgroundColor: progressPercentage >= 100 ? '#4CAF50' : '#4CAF50'
+                                width: `${Math.min(progressInfo.percentage, 100)}%`,
+                                backgroundColor: progressInfo.percentage >= 100 ? '#4CAF50' : '#4CAF50'
                             }
                         ]}
                     />
                 </View>
                 <Text style={savingsTrackerStyles.goalText}>
-                    Target: Ksh {item.target.toLocaleString()} | Saved: Ksh {item.saved.toLocaleString()}
+                    Target: Ksh {item.targetAmount.toLocaleString()} | Saved: Ksh {progressInfo.saved.toLocaleString()}
                 </Text>
                 <Text style={[
                     savingsTrackerStyles.goalPercentage,
-                    { color: progressPercentage >= 100 ? '#4CAF50' : '#4CAF50' }
+                    { color: progressInfo.percentage >= 100 ? '#4CAF50' : '#4CAF50' }
                 ]}>
-                    {Math.round(progressPercentage)}% Complete
+                    {Math.round(progressInfo.percentage)}% Complete
                 </Text>
             </View>
         );
@@ -390,10 +269,11 @@ const SavingsTracker = () => {
 
     // Chart rendering with safety checks
     const renderChart = () => {
-        const hasData = chartData.length > 0;
+        // Filter goals with non-zero target amounts
+        const goalsWithTargets = chartData.filter(goal => goal.target > 0);
         const relevantTotal = chartViewIndex === 0 ? totalSavings : totalTarget;
 
-        if (!hasData || relevantTotal === 0) {
+        if (!goalsWithTargets.length || relevantTotal === 0) {
             return (
                 <View style={savingsTrackerStyles.emptyChartContainer}>
                     <Text style={savingsTrackerStyles.emptyChartText}>
@@ -412,7 +292,7 @@ const SavingsTracker = () => {
 
         return (
             <PieChart
-                data={chartData}
+                data={goalsWithTargets}
                 width={screenWidth - 32}
                 height={220}
                 chartConfig={{
@@ -444,16 +324,16 @@ const SavingsTracker = () => {
                         <Text style={savingsTrackerStyles.overviewTitle}>Total Savings Overview</Text>
                         <View style={savingsTrackerStyles.overviewDetails}>
                             <View style={savingsTrackerStyles.overviewItem}>
-                                <Text style={savingsTrackerStyles.overviewLabel}>Target</Text>
+                                <Text style={savingsTrackerStyles.overviewLabel}>Total Saved</Text>
                                 <Text style={savingsTrackerStyles.overviewAmount}>
-                                    Ksh {totalTarget.toLocaleString()}
+                                    Ksh {currentMonthSavings.toLocaleString()}
                                 </Text>
                             </View>
                             <View style={savingsTrackerStyles.overviewDivider} />
                             <View style={savingsTrackerStyles.overviewItem}>
-                                <Text style={savingsTrackerStyles.overviewLabel}>Saved</Text>
+                                <Text style={savingsTrackerStyles.overviewLabel}>Savings Rate</Text>
                                 <Text style={[savingsTrackerStyles.overviewAmount, { color: totalTarget > totalSavings ? '#FF6B6B' : '#4CAF50' }]}>
-                                    Ksh {totalSavings.toLocaleString()}
+                                    {savingsRate.toFixed(1)}%
                                 </Text>
                             </View>
                         </View>
@@ -527,7 +407,7 @@ const SavingsTracker = () => {
 
                     {/* Savings Goals List */}
                     <FlatList
-                        data={currentGoals}
+                        data={savingsGoals}
                         renderItem={renderSavingsGoal}
                         keyExtractor={item => item.id}
                         style={savingsTrackerStyles.goalsList}
@@ -587,13 +467,13 @@ const SavingsTracker = () => {
                                     style={savingsTrackerStyles.input}
                                     placeholder="Target Amount (Ksh)"
                                     keyboardType="numeric"
-                                    value={newGoal.target}
-                                    onChangeText={(text) => setNewGoal({ ...newGoal, target: text })}
+                                    value={newGoal.targetAmount}
+                                    onChangeText={(text) => setNewGoal({ ...newGoal, targetAmount: text })}
                                 />
 
                                 <TouchableOpacity
                                     style={[savingsTrackerStyles.modalAddButton, { backgroundColor: '#007AFF' }]}
-                                    onPress={addSavingsGoal}
+                                    onPress={handleAddGoal}
                                 >
                                     <Text style={[savingsTrackerStyles.modalAddButtonText, { color: '#FFFFFF' }]}>
                                         Add Goal

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
 
 const Sidebar = () => {
     const navigation = useNavigation();
@@ -46,11 +46,6 @@ const Sidebar = () => {
     };
 
     const handleLogout = () => {
-        // Add your logout logic here
-        // For example:
-        // logout();
-        // clearUserData();
-        // navigation.replace('Login');
         navigation.navigate('Login')
         setIsSidebarVisible(false);
     };
@@ -69,8 +64,8 @@ const Sidebar = () => {
                             <Ionicons name="person" size={40} color="#666" />
                         </View>
                     )}
-                    <Text style={styles.name}>{profileData.name}</Text>
-                    <Text style={styles.business}>{profileData.business}</Text>
+                    <Text style={styles.name}>{profileData.business}</Text>
+                    <Text style={styles.business}>{profileData.name}</Text>
                 </View>
 
                 <View style={styles.menuItems}>

@@ -2,24 +2,25 @@ import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
     TouchableOpacity,
     ScrollView,
     Dimensions,
     SafeAreaView,
     StatusBar,
-    Platform,
-    FlatList
+    Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+import { LineChart } from 'react-native-chart-kit';
 import ScreenLayout from '../layouts/ScreenLayout';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext } from '../contexts/AppContext';
+import ReportStyles from '../styles/ReportStyles';
+import { useInternalData } from '../contexts/InternalDataContext';
+import FinancialReportService from '../service/FinancialReportService';
+
 
 const Reports = () => {
     const screenWidth = Dimensions.get("window").width;
     const { setCurrentScreen } = useAppContext();
-    const [selectedView, setSelectedView] = useState('daily');
     const [selectedIncomeView, setSelectedIncomeView] = useState('weekly');
     const [selectedExpenseView, setSelectedExpenseView] = useState('weekly');
     const [showTooltip, setShowTooltip] = useState({
@@ -29,72 +30,108 @@ const Reports = () => {
     });
     const [tooltipData, setTooltipData] = useState(null);
 
+    const {
+        selectedView,
+        setSelectedView,
+        financialData,
+        fetchFinancialData
+    } = useInternalData();
+
+    const [financialReportData, setFinancialReportData] = useState(null);
+    const [reportService, setReportService] = useState(null);
+
+    useEffect(() => {
+        // Fetch financial data
+        const initializeReportService = async () => {
+            try {
+                const data = financialData || await fetchFinancialData();
+
+                // Ensure data is set before creating service
+                if (data) {
+                    setFinancialReportData(data);
+                    setReportService(new FinancialReportService(data));
+                } else {
+                    throw new Error('No financial data available');
+                }
+            } catch (error) {
+                console.error('Initialization error:', error);
+                Alert.alert('Error', 'Could not initialize financial report service');
+            }
+        };
+
+        initializeReportService();
+    }, []);
+
     useEffect(() => {
         setCurrentScreen('Reports');
         calculatePLSummary();
     }, [selectedView]);
 
-    // Sample data for Profit and Loss Trend
-    const profitLossData = {
-        daily: {
-            labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-            datasets: [
-                {
-                    data: [1000, 1200, 900, 300, 300, 1000, 850],
-                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`, // Profit (blue)
-                    strokeWidth: 2
-                },
-                {
-                    data: [700, 200, 600, 750, 900, 700, 550],
-                    color: (opacity = 1) => `rgba(255, 99, 71, ${opacity})`, // Loss (red)
-                    strokeWidth: 2
-                }
-            ]
-        },
-        weekly: {
-            labels: ["Week 1", "Week 2", "Week 3", "Week 4"],
-            datasets: [
-                {
-                    data: [4500, 5000, 1300, 5200],
-                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`, // Profit (blue)
-                    strokeWidth: 2
-                },
-                {
-                    data: [1500, 6000, 3200, 3600],
-                    color: (opacity = 1) => `rgba(255, 99, 71, ${opacity})`, // Loss (red)
-                    strokeWidth: 2
-                }
-            ]
-        },
-        monthly: {
-            labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-            datasets: [
-                {
-                    data: [12000, 14000, 3000, 15000, 14500, 7000, 15000, 15000, 16000, 18000, 17000, 19000],
-                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`, // Profit (blue)
-                    strokeWidth: 2
-                },
-                {
-                    data: [8000, 9000, 8500, 9500, 15000, 10000, 12500, 11000, 10000, 12000, 15000, 13000],
-                    color: (opacity = 1) => `rgba(255, 99, 71, ${opacity})`, // Loss (red)
-                    strokeWidth: 2
-                }
-            ]
-        },
-        yearly: {
-            labels: ["2019", "2020", "2021", "2022", "2023", "2024"],
-            datasets: [
-                {
-                    data: [120000, 150000, 70000, 200000, 100000, 200000],
-                    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`, // Profit (blue)
-                    strokeWidth: 2
-                },
-                {
-                    data: [80000, 100000, 120000, 100000, 160000, 140000],
-                    color: (opacity = 1) => `rgba(255, 99, 71, ${opacity})`, // Loss (red)
-                    strokeWidth: 2
-                }
-            ]
+    const handleGenerateReport = async () => {
+        try {
+            if (!reportService) {
+                throw new Error('Report service not initialized');
+            }
+
+            const report = await reportService.generateReport();
+
+            Alert.alert(
+                'Report Generated',
+                'Your financial report has been successfully created.'
+            );
+
+            return report;
+        } catch (error) {
+            Alert.alert(
+                'Error',
+                'Unable to generate report. Please try again.'
+            );
+        }
+    };
+
+    const handleExportPDF = async () => {
+        try {
+            const report = await handleGenerateReport();
+            if (report && reportService) {
+                await reportService.exportToPDF(report);
+
+                Alert.alert(
+                    'PDF Exported',
+                    'Your financial report PDF has been successfully exported.'
+                );
+            }
+        } catch (error) {
+            Alert.alert(
+                'Error',
+                'An unexpected error occurred while exporting PDF.'
+            );
+        }
+    };
+
+    const handleDownloadPDF = async () => {
+        try {
+            if (!reportService) {
+                throw new Error('Report service not initialized');
+            }
+
+            const fileUri = await reportService.downloadPDF();
+
+            Alert.alert(
+                'PDF Downloaded',
+                'Your financial report has been saved to your device.',
+                [
+                    {
+                        text: 'Open',
+                        onPress: () => Linking.openURL(fileUri)
+                    },
+                    { text: 'OK' }
+                ]
+            );
+        } catch (error) {
+            Alert.alert(
+                'Download Failed',
+                'Unable to download the PDF. Please try again.'
+            );
         }
     };
 
@@ -136,7 +173,7 @@ const Reports = () => {
     });
 
     const calculatePLSummary = () => {
-        const currentData = profitLossData[selectedView];
+        const currentData = financialData.profitLoss[selectedView];
         const totalRevenue = currentData.datasets[0].data.reduce((a, b) => a + b, 0);
         const totalExpenses = currentData.datasets[1].data.reduce((a, b) => a + b, 0);
         const netProfit = totalRevenue - totalExpenses;
@@ -204,7 +241,7 @@ const Reports = () => {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={ReportStyles.safeArea}>
             <>
                 <StatusBar
                     barStyle="dark-content"
@@ -212,18 +249,18 @@ const Reports = () => {
                     translucent={true}
                 />
                 <ScreenLayout headerProps={screenHeaderProps}>
-                    <View style={styles.container}>
-                        <ScrollView style={styles.content}>
+                    <View style={ReportStyles.container}>
+                        <ScrollView style={ReportStyles.content}>
                             {/* Profit and Loss Trend Graph */}
-                            <View style={styles.sectionContainer}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Profit and Loss Trend</Text>
-                                    <TouchableOpacity style={styles.chartTooltipIcon} onPress={() => graphToggleTooltip('profitLoss')}>
+                            <View style={ReportStyles.sectionContainer}>
+                                <View style={ReportStyles.sectionHeader}>
+                                    <Text style={ReportStyles.sectionTitle}>Profit and Loss Trend</Text>
+                                    <TouchableOpacity style={ReportStyles.chartTooltipIcon} onPress={() => graphToggleTooltip('profitLoss')}>
                                         <Ionicons name="information-circle-outline" size={18} color="#7F7F7F" />
                                         {showTooltip.profitLoss && (
-                                            <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                                <Text style={styles.chartTooltipTitle}>Profit and Loss Trend</Text>
-                                                <Text style={styles.chartTooltipText}>
+                                            <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                                <Text style={ReportStyles.chartTooltipTitle}>Profit and Loss Trend</Text>
+                                                <Text style={ReportStyles.chartTooltipText}>
                                                     The Profit and Loss Trend graph shows your monthly revenue and expenses,
                                                     allowing you to visualize your company's financial performance over time.
                                                     Profit is displayed in blue, and loss is shown in red.
@@ -236,18 +273,18 @@ const Reports = () => {
                                         )}
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.chartContainer}>
-                                    <View style={styles.chartViewButtons}>
+                                <View style={ReportStyles.chartContainer}>
+                                    <View style={ReportStyles.chartViewButtons}>
                                         <TouchableOpacity
                                             style={[
-                                                styles.chartViewButton,
+                                                ReportStyles.chartViewButton,
                                                 selectedView === 'daily' && { backgroundColor: '#81b0ff' }
                                             ]}
                                             onPress={() => toggleView('daily')}
                                         >
                                             <Text
                                                 style={[
-                                                    styles.chartViewButtonText,
+                                                    ReportStyles.chartViewButtonText,
                                                     selectedView === 'daily' && { color: '#007AFF' }
                                                 ]}
                                             >
@@ -256,14 +293,14 @@ const Reports = () => {
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[
-                                                styles.chartViewButton,
+                                                ReportStyles.chartViewButton,
                                                 selectedView === 'weekly' && { backgroundColor: '#81b0ff' }
                                             ]}
                                             onPress={() => toggleView('weekly')}
                                         >
                                             <Text
                                                 style={[
-                                                    styles.chartViewButtonText,
+                                                    ReportStyles.chartViewButtonText,
                                                     selectedView === 'weekly' && { color: '#007AFF' }
                                                 ]}
                                             >
@@ -272,14 +309,14 @@ const Reports = () => {
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[
-                                                styles.chartViewButton,
+                                                ReportStyles.chartViewButton,
                                                 selectedView === 'monthly' && { backgroundColor: '#81b0ff' }
                                             ]}
                                             onPress={() => toggleView('monthly')}
                                         >
                                             <Text
                                                 style={[
-                                                    styles.chartViewButtonText,
+                                                    ReportStyles.chartViewButtonText,
                                                     selectedView === 'monthly' && { color: '#007AFF' }
                                                 ]}
                                             >
@@ -288,14 +325,14 @@ const Reports = () => {
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={[
-                                                styles.chartViewButton,
+                                                ReportStyles.chartViewButton,
                                                 selectedView === 'yearly' && { backgroundColor: '#81b0ff' }
                                             ]}
                                             onPress={() => toggleView('yearly')}
                                         >
                                             <Text
                                                 style={[
-                                                    styles.chartViewButtonText,
+                                                    ReportStyles.chartViewButtonText,
                                                     selectedView === 'yearly' && { color: '#007AFF' }
                                                 ]}
                                             >
@@ -305,8 +342,8 @@ const Reports = () => {
                                     </View>
                                     <LineChart
                                         data={{
-                                            labels: profitLossData[selectedView].labels,
-                                            datasets: profitLossData[selectedView].datasets
+                                            labels: financialData.profitLoss[selectedView].labels,
+                                            datasets: financialData.profitLoss[selectedView].datasets
                                         }}
                                         width={screenWidth - 40}
                                         height={300}
@@ -326,9 +363,9 @@ const Reports = () => {
                                         scrollableInfoViewStyle={{ height: 120 }}
                                     />
                                     {showTooltip.profitLoss && tooltipData && (
-                                        <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                            <Text style={styles.chartTooltipTitle}>Profit and Loss Details</Text>
-                                            <Text style={styles.chartTooltipText}>
+                                        <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                            <Text style={ReportStyles.chartTooltipTitle}>Profit and Loss Details</Text>
+                                            <Text style={ReportStyles.chartTooltipText}>
                                                 {selectedView === 'daily'
                                                     ? `${tooltipData.dayLabel}: Profit Ksh ${tooltipData.profit.toLocaleString()}, Loss Ksh ${tooltipData.loss.toLocaleString()}`
                                                     : `${tooltipData.label}: Profit Ksh ${tooltipData.profit.toLocaleString()}, Loss Ksh ${tooltipData.loss.toLocaleString()}`}
@@ -339,15 +376,15 @@ const Reports = () => {
                             </View>
 
                             {/* P&L Summary */}
-                            <View style={styles.sectionContainer}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>P&L Summary</Text>
-                                    <TouchableOpacity style={styles.chartTooltipIcon} onPress={summaryToggleTooltip}>
+                            <View style={ReportStyles.sectionContainer}>
+                                <View style={ReportStyles.sectionHeader}>
+                                    <Text style={ReportStyles.sectionTitle}>P&L Summary</Text>
+                                    <TouchableOpacity style={ReportStyles.chartTooltipIcon} onPress={summaryToggleTooltip}>
                                         <Ionicons name="information-circle-outline" size={18} color="#7F7F7F" />
                                         {showTooltip.summary && (
-                                            <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                                <Text style={styles.chartTooltipTitle}>P&L Summary</Text>
-                                                <Text style={styles.chartTooltipText}>
+                                            <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                                <Text style={ReportStyles.chartTooltipTitle}>P&L Summary</Text>
+                                                <Text style={ReportStyles.chartTooltipText}>
                                                     The P&L Summary provides a high-level overview of your company's financial performance.
                                                     It shows your total revenue, total expenses, net profit, and profit margin for the selected time period.
                                                     Use this information to identify areas for cost savings or opportunities for revenue growth.
@@ -358,20 +395,20 @@ const Reports = () => {
                                         )}
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.summaryContainer}>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Total Revenue:</Text>
-                                        <Text style={styles.summaryValue}>
+                                <View style={ReportStyles.summaryContainer}>
+                                    <View style={ReportStyles.summaryItem}>
+                                        <Text style={ReportStyles.summaryLabel}>Total Revenue:</Text>
+                                        <Text style={ReportStyles.summaryValue}>
                                             Ksh {plSummary.totalRevenue.toLocaleString()}
                                         </Text>
                                     </View>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Total Expenses:</Text>
-                                        <Text style={styles.summaryValue}>Ksh {plSummary.totalExpenses.toLocaleString()}</Text>
+                                    <View style={ReportStyles.summaryItem}>
+                                        <Text style={ReportStyles.summaryLabel}>Total Expenses:</Text>
+                                        <Text style={ReportStyles.summaryValue}>Ksh {plSummary.totalExpenses.toLocaleString()}</Text>
                                     </View>
-                                    <View style={styles.summaryItem}>
-                                        <Text style={styles.summaryLabel}>Net Profit:</Text>
-                                        <Text style={[styles.summaryValue, { color: plSummary.totalExpenses > plSummary.totalRevenue ? '#FF6B6B' : '#4CAF50' }]}>
+                                    <View style={ReportStyles.summaryItem}>
+                                        <Text style={ReportStyles.summaryLabel}>Net Profit:</Text>
+                                        <Text style={[ReportStyles.summaryValue, { color: plSummary.totalExpenses > plSummary.totalRevenue ? '#FF6B6B' : '#4CAF50' }]}>
                                             Ksh {plSummary.netProfit.toLocaleString()}
                                         </Text>
                                     </View>
@@ -379,15 +416,15 @@ const Reports = () => {
                             </View>
 
                             {/* Income Breakdown */}
-                            <View style={styles.sectionContainer}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Income Breakdown</Text>
-                                    <TouchableOpacity style={styles.chartTooltipIcon} onPress={incomeToggleTooltip}>
+                            <View style={ReportStyles.sectionContainer}>
+                                <View style={ReportStyles.sectionHeader}>
+                                    <Text style={ReportStyles.sectionTitle}>Income Breakdown</Text>
+                                    <TouchableOpacity style={ReportStyles.chartTooltipIcon} onPress={incomeToggleTooltip}>
                                         <Ionicons name="information-circle-outline" size={18} color="#7F7F7F" />
                                         {showTooltip.income && (
-                                            <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                                <Text style={styles.chartTooltipTitle}>Income Breakdown</Text>
-                                                <Text style={styles.chartTooltipText}>
+                                            <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                                <Text style={ReportStyles.chartTooltipTitle}>Income Breakdown</Text>
+                                                <Text style={ReportStyles.chartTooltipText}>
                                                     The Income Breakdown shows the different sources of your business revenue, such as subscriptions, one-time sales, and consulting.
                                                     This information helps you understand the relative contributions of each revenue stream and identify opportunities for growth.
                                                     For example, if a significant portion of your income comes from one-time sales, you may want to focus on building a more stable, subscription-based revenue model.
@@ -397,16 +434,16 @@ const Reports = () => {
                                         )}
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.chartViewButtons}>
+                                <View style={ReportStyles.chartViewButtons}>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedIncomeView === 'weekly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedIncomeView('weekly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedIncomeView === 'weekly' && { color: '#007AFF' }
                                         ]}>
                                             Weekly
@@ -414,13 +451,13 @@ const Reports = () => {
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedIncomeView === 'monthly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedIncomeView('monthly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedIncomeView === 'monthly' && { color: '#007AFF' }
                                         ]}>
                                             Monthly
@@ -428,24 +465,24 @@ const Reports = () => {
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedIncomeView === 'yearly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedIncomeView('yearly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedIncomeView === 'yearly' && { color: '#007AFF' }
                                         ]}>
                                             Yearly
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.summaryContainer}>
+                                <View style={ReportStyles.summaryContainer}>
                                     {incomeBreakdown.map((item) => (
-                                        <View key={item.category} style={styles.summaryItem}>
-                                            <Text style={styles.summaryLabel}>{item.category}</Text>
-                                            <Text style={styles.summaryValue}>
+                                        <View key={item.category} style={ReportStyles.summaryItem}>
+                                            <Text style={ReportStyles.summaryLabel}>{item.category}</Text>
+                                            <Text style={ReportStyles.summaryValue}>
                                                 Ksh {(item[selectedIncomeView] || 0).toLocaleString()}
                                             </Text>
                                         </View>
@@ -454,15 +491,15 @@ const Reports = () => {
                             </View>
 
                             {/* Expense Breakdown */}
-                            <View style={styles.sectionContainer}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Expense Breakdown</Text>
-                                    <TouchableOpacity style={styles.chartTooltipIcon} onPress={expenseToggleTooltip}>
+                            <View style={ReportStyles.sectionContainer}>
+                                <View style={ReportStyles.sectionHeader}>
+                                    <Text style={ReportStyles.sectionTitle}>Expense Breakdown</Text>
+                                    <TouchableOpacity style={ReportStyles.chartTooltipIcon} onPress={expenseToggleTooltip}>
                                         <Ionicons name="information-circle-outline" size={18} color="#7F7F7F" />
                                         {showTooltip.expenses && (
-                                            <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                                <Text style={styles.chartTooltipTitle}>Expense Breakdown</Text>
-                                                <Text style={styles.chartTooltipText}>
+                                            <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                                <Text style={ReportStyles.chartTooltipTitle}>Expense Breakdown</Text>
+                                                <Text style={ReportStyles.chartTooltipText}>
                                                     The Expense Breakdown shows the different categories of your business expenses, such as rent, payroll, and marketing.
                                                     This information helps you identify areas where you may be able to cut costs or find more efficient ways of operating.
                                                     For example, if your rent is a significant portion of your expenses, you could look into options like co-working spaces or negotiating with your landlord.
@@ -472,16 +509,16 @@ const Reports = () => {
                                         )}
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.chartViewButtons}>
+                                <View style={ReportStyles.chartViewButtons}>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedExpenseView === 'weekly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedExpenseView('weekly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedExpenseView === 'weekly' && { color: '#007AFF' }
                                         ]}>
                                             Weekly
@@ -489,13 +526,13 @@ const Reports = () => {
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedExpenseView === 'monthly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedExpenseView('monthly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedExpenseView === 'monthly' && { color: '#007AFF' }
                                         ]}>
                                             Monthly
@@ -503,24 +540,24 @@ const Reports = () => {
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[
-                                            styles.chartViewButton,
+                                            ReportStyles.chartViewButton,
                                             selectedExpenseView === 'yearly' && { backgroundColor: '#81b0ff' }
                                         ]}
                                         onPress={() => setSelectedExpenseView('yearly')}
                                     >
                                         <Text style={[
-                                            styles.chartViewButtonText,
+                                            ReportStyles.chartViewButtonText,
                                             selectedExpenseView === 'yearly' && { color: '#007AFF' }
                                         ]}>
                                             Yearly
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.summaryContainer}>
+                                <View style={ReportStyles.summaryContainer}>
                                     {expenseBreakdown.map((item) => (
-                                        <View key={item.category} style={styles.summaryItem}>
-                                            <Text style={styles.summaryLabel}>{item.category}</Text>
-                                            <Text style={styles.summaryValue}>
+                                        <View key={item.category} style={ReportStyles.summaryItem}>
+                                            <Text style={ReportStyles.summaryLabel}>{item.category}</Text>
+                                            <Text style={ReportStyles.summaryValue}>
                                                 Ksh {(item[selectedExpenseView] || 0).toLocaleString()}
                                             </Text>
                                         </View>
@@ -529,15 +566,15 @@ const Reports = () => {
                             </View>
 
                             {/* Monthly Recurring Revenue (MRR) Trend */}
-                            <View style={styles.sectionContainer}>
-                                <View style={styles.sectionHeader}>
-                                    <Text style={styles.sectionTitle}>Monthly Recurring Revenue (MRR) Trend</Text>
-                                    <TouchableOpacity style={styles.chartTooltipIcon} onPress={mrrToggleTooltip}>
+                            <View style={ReportStyles.sectionContainer}>
+                                <View style={ReportStyles.sectionHeader}>
+                                    <Text style={ReportStyles.sectionTitle}>Monthly Recurring Revenue (MRR) Trend</Text>
+                                    <TouchableOpacity style={ReportStyles.chartTooltipIcon} onPress={mrrToggleTooltip}>
                                         <Ionicons name="information-circle-outline" size={18} color="#7F7F7F" />
                                         {showTooltip.mrr && (
-                                            <View style={[styles.chartTooltip, styles.elevatedTooltip]}>
-                                                <Text style={styles.chartTooltipTitle}>Monthly Recurring Revenue (MRR) Trend</Text>
-                                                <Text style={styles.chartTooltipText}>
+                                            <View style={[ReportStyles.chartTooltip, ReportStyles.elevatedTooltip]}>
+                                                <Text style={ReportStyles.chartTooltipTitle}>Monthly Recurring Revenue (MRR) Trend</Text>
+                                                <Text style={ReportStyles.chartTooltipText}>
                                                     The Monthly Recurring Revenue (MRR) Trend graph shows your monthly recurring revenue over time.
                                                     This metric is crucial for understanding the stability and growth of your subscription-based business.
                                                     Monitoring your MRR trend can help you identify any changes in your customer retention or subscription pricing, which can inform your business decisions.
@@ -547,7 +584,7 @@ const Reports = () => {
                                         )}
                                     </TouchableOpacity>
                                 </View>
-                                <View style={styles.chartContainer}>
+                                <View style={ReportStyles.chartContainer}>
                                     <LineChart
                                         data={{
                                             labels: mrrData.labels,
@@ -562,8 +599,8 @@ const Reports = () => {
                                         onDataPointClick={(data) => graphToggleTooltip('mrr', data)}
                                     />
                                     {showTooltip.mrr && tooltipData && (
-                                        <View style={styles.chartTooltip}>
-                                            <Text style={styles.chartTooltipText}>
+                                        <View style={ReportStyles.chartTooltip}>
+                                            <Text style={ReportStyles.chartTooltipText}>
                                                 {tooltipData.label}: Ksh {tooltipData.value.toLocaleString()}
                                             </Text>
                                         </View>
@@ -572,17 +609,26 @@ const Reports = () => {
                             </View>
 
                             {/* Generate Report Button */}
-                            <TouchableOpacity style={[styles.generateButton, { backgroundColor: '#007AFF' }]}>
-                                <Text style={styles.generateButtonText}>Generate Report</Text>
+                            <TouchableOpacity
+                                style={[ReportStyles.generateButton, { backgroundColor: '#007AFF' }]}
+                                onPress={handleGenerateReport}
+                            >
+                                <Text style={ReportStyles.generateButtonText}>Generate Report</Text>
                             </TouchableOpacity>
 
                             {/* Export Options */}
-                            <View style={styles.exportContainer}>
-                                <TouchableOpacity style={[styles.exportButton, { backgroundColor: '#f0f0f0' }]}>
-                                    <Text style={[styles.exportButtonText, { color: '#007AFF' }]}>Export PDF</Text>
+                            <View style={ReportStyles.exportContainer}>
+                                <TouchableOpacity
+                                    style={[ReportStyles.exportButton, { backgroundColor: '#f0f0f0' }]}
+                                    onPress={handleExportPDF}
+                                >
+                                    <Text style={[ReportStyles.exportButtonText, { color: '#007AFF' }]}>Export PDF</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.exportButton, { backgroundColor: '#f0f0f0' }]}>
-                                    <Text style={[styles.exportButtonText, { color: '#007AFF' }]}>Export CSV</Text>
+                                <TouchableOpacity
+                                    style={[ReportStyles.exportButton, { backgroundColor: '#f0f0f0' }]}
+                                    onPress={handleDownloadPDF}
+                                >
+                                    <Text style={[ReportStyles.exportButtonText, { color: '#007AFF' }]}>Download PDF</Text>
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>
@@ -592,231 +638,5 @@ const Reports = () => {
         </SafeAreaView>
     );
 };
-
-const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    },
-    container: {
-        flex: 1,
-        flexDirection: 'row',
-    },
-    content: {
-        flex: 1,
-        padding: 20,
-        backgroundColor: '#fff',
-    },
-    sectionContainer: {
-        marginBottom: 20,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#000000'
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10
-    },
-    chartContainer: {
-        position: 'relative',
-        overflow: 'visible',
-    },
-    scrollableInfoViewContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 12,
-    },
-    scrollableInfoViewText: {
-        fontSize: 14,
-        color: '#7F7F7F',
-    },
-    chartViewButtons: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: 10,
-    },
-    chartViewButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        marginHorizontal: 4,
-    },
-    chartViewButtonText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#767577',
-    },
-    chartTooltipIcon: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 1,
-    },
-    chartTooltip: {
-        position: 'absolute',
-        top: 30,
-        right: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 12,
-        borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-        width: 280,
-    },
-    chartTooltipText: {
-        fontSize: 14,
-        color: '#7F7F7F',
-    },
-    elevatedTooltip: {
-        backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5
-    },
-    chartTooltipTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 8
-    },
-    summaryContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 16,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    summaryItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    summaryLabel: {
-        fontSize: 16,
-        color: '#666',
-        //fontWeight: 'bold',
-    },
-    summaryValue: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#666'
-    },
-    generateButton: {
-        padding: 15,
-        borderRadius: 5,
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    generateButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    exportContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 42,
-    },
-    exportButton: {
-        padding: 10,
-        borderRadius: 5,
-        width: '48%',
-        alignItems: 'center',
-    },
-    exportButtonText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    expenseItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0'
-    },
-    expenseCategory: {
-        fontSize: 16,
-        color: '#7F7F7F'
-    },
-    expenseAmount: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#000'
-    },
-    breakdownContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        padding: 16,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    breakdownItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0'
-    },
-    breakdownCategory: {
-        fontSize: 16,
-        color: '#7F7F7F'
-    },
-    breakdownAmount: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#000'
-    },
-    breakdownPeriodContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    breakdownPeriodItem: {
-        alignItems: 'center',
-    },
-    breakdownPeriodLabel: {
-        fontSize: 14,
-        color: '#7F7F7F'
-    },
-    breakdownPeriodValue: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#000'
-    },
-    profitMargin: {
-        color: '#20B2AA' // Light Sea Green for profit margin
-    }
-});
 
 export default Reports;

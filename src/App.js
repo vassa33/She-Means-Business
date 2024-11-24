@@ -1,8 +1,8 @@
 import React from 'react';
 import { registerRootComponent } from 'expo';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './contexts/AuthContext';
 import { createStackNavigator } from '@react-navigation/stack';
-import { AppProvider } from './context/AppContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar, View, Text, StyleSheet, Platform } from 'react-native';
 import { useFonts } from 'expo-font';
@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { SvgXml } from 'react-native-svg';
 
 // Import screens
-import Login from './screens/Login';
-import CreateAccount from './screens/CreateAccount';
+import Login from './screens/Authentication/Login';
+import CreateAccount from './screens/Authentication/CreateAccount';
 import Dashboard from './screens/Dashboard';
 import TransactionLog from './screens/TransactionLog';
 import CashFlow from './screens/CashFlow';
@@ -21,6 +21,11 @@ import Reports from './screens/Reports';
 import Profile from './screens/Profile';
 import About from './screens/About';
 import ActionCenter from './screens/ActionCenter';
+import { AuthProvider } from './contexts/AuthContext';
+import { UIProvider } from './contexts/UIContext';
+import { DataProvider } from './contexts/DataContext';
+import { AppProvider } from './contexts/AppContext';
+import { InternalDataProvider } from './contexts/InternalDataContext';
 
 // Create the stack navigator
 const Stack = createStackNavigator();
@@ -100,27 +105,35 @@ function App() {
                 backgroundColor="transparent"
                 translucent={true}
             />
-            <AppProvider>
-                <NavigationContainer>
-                    <Stack.Navigator
-                        screenOptions={{
-                            headerShown: false,
-                        }}
-                        initialRouteName="Login">
-                        <Stack.Screen name="Login" component={Login} />
-                        <Stack.Screen name="CreateAccount" component={CreateAccount} />
-                        <Stack.Screen name="Dashboard" component={Dashboard} />
-                        <Stack.Screen name="ActionCenter" component={ActionCenter} />
-                        <Stack.Screen name="TransactionLog" component={TransactionLog} />
-                        <Stack.Screen name="CashFlow" component={CashFlow} />
-                        <Stack.Screen name="BudgetTracker" component={BudgetTracker} />
-                        <Stack.Screen name="SavingsTracker" component={SavingsTracker} />
-                        <Stack.Screen name="Reports" component={Reports} />
-                        <Stack.Screen name="Profile" component={Profile} />
-                        <Stack.Screen name="About" component={About} />
-                    </Stack.Navigator>
-                </NavigationContainer>
-            </AppProvider>
+            <NavigationContainer ref={navigationRef}>
+                <UIProvider>
+                    <AuthProvider>
+                        <InternalDataProvider>
+                            <DataProvider>
+                                <AppProvider>
+                                    <Stack.Navigator
+                                        screenOptions={{
+                                            headerShown: false,
+                                        }}
+                                        initialRouteName="Login">
+                                        <Stack.Screen name="Login" component={Login} />
+                                        <Stack.Screen name="CreateAccount" component={CreateAccount} />
+                                        <Stack.Screen name="Dashboard" component={Dashboard} />
+                                        <Stack.Screen name="ActionCenter" component={ActionCenter} />
+                                        <Stack.Screen name="TransactionLog" component={TransactionLog} />
+                                        <Stack.Screen name="CashFlow" component={CashFlow} />
+                                        <Stack.Screen name="BudgetTracker" component={BudgetTracker} />
+                                        <Stack.Screen name="SavingsTracker" component={SavingsTracker} />
+                                        <Stack.Screen name="Reports" component={Reports} />
+                                        <Stack.Screen name="Profile" component={Profile} />
+                                        <Stack.Screen name="About" component={About} />
+                                    </Stack.Navigator>
+                                </AppProvider>
+                            </DataProvider>
+                        </InternalDataProvider>
+                    </AuthProvider>
+                </UIProvider>
+            </NavigationContainer>
         </SafeAreaProvider>
     );
 }
